@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+.netlify/
+.vercel/
+.output/
+
+# Grok sandbox (not version-controlled)
+.grok/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Screenshots (browser QA)
+screenshots/
+
+# TypeScript build cache
+*.tsbuildinfo

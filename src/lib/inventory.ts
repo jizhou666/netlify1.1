@@ -1,0 +1,161 @@
+export type MovementKind = "in" | "out" | "adjust";
+
+export type InventoryVariant = {
+  id: number;
+  productId: number;
+  color: string;
+  remainingCartons: number;
+  remainingSets: number;
+  inCartons: number;
+  inSets: number;
+  outCartons: number;
+  outSets: number;
+  sortOrder: number;
+};
+
+export type InventoryProduct = {
+  id: number;
+  categoryId: number;
+  sku: string;
+  packingQty: number;
+  packingUnit: string;
+  sortOrder: number;
+  variants: InventoryVariant[];
+};
+
+export type InventoryCategory = {
+  id: number;
+  name: string;
+  sortOrder: number;
+  products: InventoryProduct[];
+};
+
+export type InventoryPayload = {
+  warehouseName: string;
+  date: string;
+  categories: InventoryCategory[];
+  stats: {
+    productCount: number;
+    variantCount: number;
+    outOfStock: number;
+    todayInLines: number;
+    todayOutLines: number;
+  };
+};
+
+export type CategoryOption = {
+  id: number;
+  name: string;
+};
+
+export type StockMovement = {
+  id: number;
+  variantId: number;
+  sku: string;
+  color: string;
+  movementDate: string;
+  kind: MovementKind;
+  cartons: number;
+  sets: number;
+  note: string | null;
+  createdAt: string;
+};
+
+export function formatQty(cartons: number, sets: number): string {
+  if (cartons === 0 && sets === 0) return "0";
+  const parts: string[] = [];
+  if (cartons !== 0) parts.push(`${cartons}件`);
+  if (sets !== 0) parts.push(`${sets}套`);
+  return parts.join("+");
+}
+
+export function formatPacking(qty: number, unit: string): string {
+  return `${qty}${unit}/件`;
+}
+
+export function todayISO(now = new Date()): string {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+export function formatLedgerDate(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return iso;
+  return `${Number(y)}. ${Number(m)}. ${Number(d)}`;
+}
+
+export type ColorSwatch = {
+  token: string;
+  label: string;
+};
+
+const SWATCH_RULES: { match: RegExp; token: string }[] = [
+  { match: /黄/, token: "swatch-yellow" },
+  { match: /红|朱红|玫红/, token: "swatch-red" },
+  { match: /橙/, token: "swatch-orange" },
+  { match: /绿|青/, token: "swatch-green" },
+  { match: /蓝|靛/, token: "swatch-blue" },
+  { match: /粉|桃/, token: "swatch-pink" },
+  { match: /紫|lilac/i, token: "swatch-violet" },
+  { match: /白|米|象牙/, token: "swatch-white" },
+  { match: /黑|墨/, token: "swatch-black" },
+  { match: /棕|咖|褐/, token: "swatch-brown" },
+  { match: /灰|银/, token: "swatch-gray" },
+  { match: /金/, token: "swatch-gold" },
+];
+
+export function colorSwatchToken(color: string): string {
+  const hit = SWATCH_RULES.find((rule) => rule.match.test(color));
+  return hit?.token ?? "swatch-unknown";
+}
+
+export function isOutOfStock(cartons: number, sets: number): boolean {
+  return cartons === 0 && sets === 0;
+}
+
+export const KIND_LABEL: Record<MovementKind, string> = {
+  in: "入库",
+  out: "出库",
+  adjust: "修正",
+};
+
+function csvCell(value: string) {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
+export function ledgerToCsv(payload: InventoryPayload): string {
+  const header = ["分类", "货号", "装箱数量", "颜色及型号", "本日入", "本日出", "剩余数量"];
+  const lines = [header.map(csvCell).join(",")];
+  for (const category of payload.categories) {
+    for (const product of category.products) {
+      const packing = formatPacking(product.packingQty, product.packingUnit);
+      for (const variant of product.variants) {
+        const inbound =
+          variant.inCartons === 0 && variant.inSets === 0
+            ? ""
+            : formatQty(variant.inCartons, variant.inSets);
+        const outbound =
+          variant.outCartons === 0 && variant.outSets === 0
+            ? ""
+            : formatQty(variant.outCartons, variant.outSets);
+        lines.push(
+          [
+            category.name,
+            product.sku,
+            packing,
+            variant.color,
+            inbound,
+            outbound,
+            formatQty(variant.remainingCartons, variant.remainingSets),
+          ]
+            .map(csvCell)
+            .join(","),
+        );
+      }
+    }
+  }
+  return lines.join("\r\n");
+}
+

@@ -1,0 +1,44 @@
+# Netlify deploy for 芳村仓库存 (TanStack Start + Nitro).
+# Netlify sets NETLIFY=true, so the production build emits Netlify functions
+# into .netlify/functions-internal and static assets into dist/.
+#
+# ═══ 必须配置的环境变量 ═══
+# 在 Netlify Site settings → Environment variables 中添加：
+#
+#   DATABASE_URL   Neon Postgres 连接字符串
+#                  格式: postgresql://user:pass@ep-xxx.region.aws.neon.tech/dbname?sslmode=require
+#                  获取方式: Neon 控制台 → 项目 → Connection Details → 复制连接字符串
+#
+# 连接字符串必须包含 sslmode=require（Neon 默认已包含）。
+# 如果没有自动包含，请手动追加 ?sslmode=require
+#
+# Auth 保持关闭状态。任何拥有站点 URL 的人都可以读写共享库存。
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+  # Netlify CI 自动设置 NETLIFY=true，触发 Nitro 的 netlify preset
+  NETLIFY = "true"
+
+# Netlify Functions 配置
+# Nitro 的 netlify preset 会自动生成 .netlify/functions-internal/ 下的函数
+[functions]
+  node_bundler = "esbuild"
+  # 确保迁移文件被包含在函数包中（运行时兜底迁移需要）
+  included_files = ["migrations/**", "node_modules/@electric-sql/pglite/**"]
+
+# 将所有非静态资源请求路由到 Nitro 生成的 serverless 函数
+# Nitro 会自动生成 _redirects 文件，此处作为兜底
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/__server"
+  status = 200
+
+# SPA 兜底 - 让 TanStack Router 处理客户端路由
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/__server"
+  status = 200

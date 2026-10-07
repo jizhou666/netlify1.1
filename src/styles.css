@@ -1,0 +1,107 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme {
+  --font-sans: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    system-ui, sans-serif;
+  --font-serif: "Noto Serif SC", "Songti SC", "STSong", serif;
+  --font-display: var(--font-serif);
+
+  --color-background: #f3eee4;
+  --color-foreground: #1c1915;
+  --color-card: #fbf7f0;
+  --color-card-foreground: #1c1915;
+  --color-popover: #fffcf7;
+  --color-popover-foreground: #1c1915;
+  --color-primary: #9d2b22;
+  --color-primary-foreground: #fbf7f0;
+  --color-secondary: #ebe4d6;
+  --color-secondary-foreground: #1c1915;
+  --color-muted: #efe8da;
+  --color-muted-foreground: #6b6458;
+  --color-accent: #e7dfd0;
+  --color-accent-foreground: #1c1915;
+  --color-destructive: #9d2b22;
+  --color-border: #d9d0c0;
+  --color-input: #d9d0c0;
+  --color-ring: #9d2b22;
+  --color-ok: #3f6b4a;
+  --color-warn: #9a5b1f;
+  --color-ledger: #9d2b22;
+  --color-paper: #f3eee4;
+  --color-rule: #cfc6b6;
+
+  --color-swatch-yellow: #c6a135;
+  --color-swatch-red: #b4332a;
+  --color-swatch-orange: #c45e1a;
+  --color-swatch-green: #3f6b4a;
+  --color-swatch-blue: #355579;
+  --color-swatch-pink: #b85a74;
+  --color-swatch-violet: #5a4d6e;
+  --color-swatch-white: #f7f2e8;
+  --color-swatch-black: #2a2723;
+  --color-swatch-brown: #6b4a32;
+  --color-swatch-gray: #7a7368;
+  --color-swatch-gold: #a4843a;
+  --color-swatch-unknown: #8a8378;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius: 10px;
+
+  --shadow-ledger: 0 1px 0 rgb(28 25 21 / 0.04), 0 18px 40px -28px rgb(28 25 21 / 0.35);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    opacity: 0.55;
+    cursor: pointer;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  body {
+    background: #fff;
+    color: #1c1915;
+  }
+
+  .shadow-ledger {
+    box-shadow: none !important;
+  }
+}
