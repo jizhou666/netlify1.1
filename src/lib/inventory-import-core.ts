@@ -43,6 +43,8 @@ export async function writeDraftToDb(
     const variantSeen = new Map<string, number>();
     let variantSeq = 0;
 
+    // 货号级装箱数量只作默认值/回退值（同一货号的「高」「矮」型号可能不同，
+    // 例如 1901-83 高 70个/件、矮 105个/件），因此取首个型号的装箱规格。
     const ensureProduct = async (cat: string, sku: string, qty: number, unit: string) => {
       const key = productKey(cat, sku);
       const existing = productId.get(key);
@@ -67,20 +69,26 @@ export async function writeDraftToDb(
       const vkey = `${v.category}\u0000${v.sku}\u0000${v.warehouse}\u0000${v.color}`;
       const known = variantSeen.get(vkey);
       if (known == null) {
+        // 型号行的装箱数量按 Excel 该行原样写入（跨行合并的装箱列在解析时已回填，
+        // 高/矮分别写自己的规格），不再被货号级覆盖。
         const rows = await run<{ id: number }>(
-          `insert into variants (product_id, color, warehouse, remaining_cartons, remaining_sets, sort_order)
-           values ($1, $2, $3, $4, $5, $6) returning id`,
-          [pid, v.color, v.warehouse, v.cartons, v.sets, ++variantSeq],
+          `insert into variants (product_id, color, warehouse, packing_qty, packing_unit, remaining_cartons, remaining_sets, sort_order)
+           values ($1, $2, $3, $4, $5, $6, $7, $8) returning id`,
+          [pid, v.color, v.warehouse, v.packingQty, v.packingUnit, v.cartons, v.sets, ++variantSeq],
         );
         const created = rows[0]?.id;
         if (created == null) throw new Error(`颜色 ${v.color} 创建失败`);
         variantSeen.set(vkey, created);
         variantRows += 1;
       } else {
+        // 重复行合并数量；装箱规格缺失时才补上，不覆盖已有值。
         await run(
           `update variants set remaining_cartons = remaining_cartons + $2,
-           remaining_sets = remaining_sets + $3 where id = $1`,
-          [known, v.cartons, v.sets],
+             remaining_sets = remaining_sets + $3,
+             packing_qty = coalesce(packing_qty, $4),
+             packing_unit = coalesce(packing_unit, $5)
+           where id = $1`,
+          [known, v.cartons, v.sets, v.packingQty, v.packingUnit],
         );
       }
       for (const mv of v.movements) {

@@ -133,44 +133,96 @@ function CategoryBlock({
           </td>
         </tr>
       ) : (
-        category.products.map((product) =>
-          product.variants.map((variant, index) => (
-            <tr key={variant.id} className="border-t border-rule/80 hover:bg-muted/40">
-              {index === 0 ? (
-                <td
-                  rowSpan={product.variants.length}
-                  className="border-r border-rule/70 px-4 py-3 align-top font-medium"
-                >
-                  {product.sku}
-                </td>
-              ) : null}
-              {index === 0 ? (
-                <td
-                  rowSpan={product.variants.length}
-                  className="border-r border-rule/70 px-3 py-3 align-top tabular-nums text-muted-foreground"
-                >
-                  {formatPacking(product.packingQty, product.packingUnit)}
-                </td>
-              ) : null}
-              <td className="px-3 py-3">
-                <ColorLabel color={variant.color} />
-              </td>
-              <td className="px-3 py-3">
-                <QtyCell cartons={variant.inCartons} sets={variant.inSets} empty />
-              </td>
-              <td className="px-3 py-3">
-                <QtyCell cartons={variant.outCartons} sets={variant.outSets} empty />
-              </td>
-              <td className="px-3 py-3 font-medium">
-                <QtyCell cartons={variant.remainingCartons} sets={variant.remainingSets} />
-              </td>
-              <td className="px-2 py-2 text-right print:hidden">
-                <RowMenu product={product} variant={variant} handlers={handlers} />
-              </td>
-            </tr>
-          )),
-        )
+        category.products.map((product) => (
+          <ProductRows key={product.id} product={product} handlers={handlers} />
+        ))
       )}
+    </>
+  );
+}
+
+type PackingCell = { span: number; qty: number; unit: string };
+
+/**
+ * 同一货号下相邻型号的装箱数量可能相同（红/绿/橙都是 70个/件），也可能不同
+ * （高 70个/件、矮 105个/件）。按「连续相同规格」合并成一格：既贴近 Excel 原表，
+ * 又不会把「高」的规格错显示到「矮」行上。
+ */
+export function packingCells(variants: InventoryVariant[]): Map<number, PackingCell> {
+  const cells = new Map<number, PackingCell>();
+  let i = 0;
+  while (i < variants.length) {
+    const head = variants[i]!;
+    let span = 1;
+    while (
+      i + span < variants.length &&
+      variants[i + span]!.packingQty === head.packingQty &&
+      variants[i + span]!.packingUnit === head.packingUnit
+    ) {
+      span += 1;
+    }
+    cells.set(i, { span, qty: head.packingQty, unit: head.packingUnit });
+    i += span;
+  }
+  return cells;
+}
+
+function ProductRows({
+  product,
+  handlers,
+}: {
+  product: InventoryProduct;
+  handlers: LedgerHandlers;
+}) {
+  const cells = packingCells(product.variants);
+  return (
+    <>
+      {product.variants.map((variant, index) => {
+        const cell = cells.get(index);
+        const isDefault =
+          cell != null &&
+          cell.qty === product.packingQty &&
+          cell.unit === product.packingUnit;
+        return (
+          <tr key={variant.id} className="border-t border-rule/80 hover:bg-muted/40">
+            {index === 0 ? (
+              <td
+                rowSpan={product.variants.length}
+                className="border-r border-rule/70 px-4 py-3 align-top font-medium"
+              >
+                {product.sku}
+              </td>
+            ) : null}
+            {cell ? (
+              <td
+                rowSpan={cell.span}
+                title={isDefault ? "货号默认装箱数量" : "该型号单独的装箱数量"}
+                className={cn(
+                  "border-r border-rule/70 px-3 py-3 align-top tabular-nums",
+                  isDefault ? "text-muted-foreground" : "font-medium text-foreground",
+                )}
+              >
+                {formatPacking(cell.qty, cell.unit)}
+              </td>
+            ) : null}
+            <td className="px-3 py-3">
+              <ColorLabel color={variant.color} />
+            </td>
+            <td className="px-3 py-3">
+              <QtyCell cartons={variant.inCartons} sets={variant.inSets} empty />
+            </td>
+            <td className="px-3 py-3">
+              <QtyCell cartons={variant.outCartons} sets={variant.outSets} empty />
+            </td>
+            <td className="px-3 py-3 font-medium">
+              <QtyCell cartons={variant.remainingCartons} sets={variant.remainingSets} />
+            </td>
+            <td className="px-2 py-2 text-right print:hidden">
+              <RowMenu product={product} variant={variant} handlers={handlers} />
+            </td>
+          </tr>
+        );
+      })}
     </>
   );
 }
@@ -195,7 +247,7 @@ export function LedgerCards({
                 <header className="mb-2 flex items-baseline justify-between gap-3 border-b border-border pb-2">
                   <h3 className="font-medium">{product.sku}</h3>
                   <span className="text-xs tabular-nums text-muted-foreground">
-                    {formatPacking(product.packingQty, product.packingUnit)}
+                    默认 {formatPacking(product.packingQty, product.packingUnit)}
                   </span>
                 </header>
                 <ul className="flex flex-col">
@@ -205,7 +257,15 @@ export function LedgerCards({
                       className="flex items-center justify-between gap-2 border-b border-rule/60 py-2.5 last:border-0"
                     >
                       <div className="min-w-0">
-                        <ColorLabel color={variant.color} />
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <ColorLabel color={variant.color} />
+                          {variant.packingQty !== product.packingQty ||
+                          variant.packingUnit !== product.packingUnit ? (
+                            <span className="rounded border border-border bg-secondary px-1.5 py-0.5 text-[11px] tabular-nums text-secondary-foreground">
+                              {formatPacking(variant.packingQty, variant.packingUnit)}
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="mt-1 text-xs text-muted-foreground">
                           入 <QtyCell cartons={variant.inCartons} sets={variant.inSets} empty />
                           <span className="mx-1.5">·</span>

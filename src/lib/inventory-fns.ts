@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getSql } from "@/lib/db";
+import { subtractStock } from "@/lib/stock-math";
 import type {
   CategoryOption,
   InventoryCategory,
@@ -30,6 +31,8 @@ type VariantRow = {
   product_id: number;
   color: string;
   warehouse: string;
+  packing_qty: number | null;
+  packing_unit: string | null;
   remaining_cartons: number;
   remaining_sets: number;
   sort_order: number;
@@ -66,26 +69,6 @@ function asInt(value: number, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function subtractStock(
-  cartons: number,
-  sets: number,
-  outCartons: number,
-  outSets: number,
-  packingQty: number,
-) {
-  let nextCartons = cartons - outCartons;
-  let nextSets = sets - outSets;
-  const pack = packingQty > 0 ? packingQty : 0;
-  while (nextSets < 0 && pack > 0 && nextCartons > 0) {
-    nextCartons -= 1;
-    nextSets += pack;
-  }
-  if (nextCartons < 0 || nextSets < 0) {
-    throw new Error("库存不足，无法出库");
-  }
-  return { cartons: nextCartons, sets: nextSets };
-}
-
 async function loadInventory(
   date: string,
   query: string,
@@ -104,7 +87,8 @@ async function loadInventory(
         order by sort_order, id
       `,
       sql<VariantRow>`
-        select v.id, v.product_id, v.color, v.warehouse, v.remaining_cartons, v.remaining_sets, v.sort_order
+        select v.id, v.product_id, v.color, v.warehouse, v.packing_qty, v.packing_unit,
+               v.remaining_cartons, v.remaining_sets, v.sort_order
         from variants v
         join products p on p.id = v.product_id
         where v.warehouse = ${warehouse}
@@ -183,6 +167,9 @@ async function loadInventory(
             productId: v.product_id,
             color: v.color,
             warehouse: v.warehouse,
+            // 型号行装箱数优先，空则回退货号级（兼容旧数据）。
+            packingQty: v.packing_qty ?? product.packing_qty,
+            packingUnit: v.packing_unit ?? product.packing_unit,
             remainingCartons: v.remaining_cartons,
             remainingSets: v.remaining_sets,
             inCartons,
@@ -310,8 +297,8 @@ export const createProduct = createServerFn({ method: "POST" })
     const productId = products[0]?.id;
     if (!productId) throw new Error("新增货品失败");
     await sql`
-      insert into variants (product_id, color, warehouse, remaining_cartons, remaining_sets, sort_order)
-      values (${productId}, ${data.color}, ${data.warehouse}, ${data.remainingCartons}, ${data.remainingSets}, 1)
+      insert into variants (product_id, color, warehouse, packing_qty, packing_unit, remaining_cartons, remaining_sets, sort_order)
+      values (${productId}, ${data.color}, ${data.warehouse}, ${data.packingQty}, ${data.packingUnit}, ${data.remainingCartons}, ${data.remainingSets}, 1)
     `;
     return { id: productId };
   });
@@ -322,6 +309,11 @@ const updateProductInput = z.object({
   sku: z.string().trim().min(1).max(80),
   packingQty: z.number().int().positive(),
   packingUnit: z.string().trim().min(1).max(8),
+  /**
+   * 货号级装箱数量只是「新增型号时的默认值 / 型号未单独设置时的回退值」。
+   * 勾选后连型号行一起改写，适合"整箱规格统一调整"的场景。
+   */
+  syncVariants: z.boolean().optional(),
 });
 
 export const updateProduct = createServerFn({ method: "POST" })
@@ -337,6 +329,15 @@ export const updateProduct = createServerFn({ method: "POST" })
           updated_at = now()
       where id = ${data.id}
     `;
+    if (data.syncVariants) {
+      await sql`
+        update variants
+        set packing_qty = ${data.packingQty},
+            packing_unit = ${data.packingUnit},
+            updated_at = now()
+        where product_id = ${data.id}
+      `;
+    }
     return { ok: true as const };
   });
 
@@ -356,6 +357,8 @@ const createVariantInput = z.object({
   remainingCartons: z.number().int().min(0),
   remainingSets: z.number().int().min(0),
   warehouse: z.string().trim().min(1).max(20).default("芳村"),
+  packingQty: z.number().int().positive().optional(),
+  packingUnit: z.string().trim().min(1).max(8).optional(),
 });
 
 export const createVariant = createServerFn({ method: "POST" })
@@ -369,8 +372,8 @@ export const createVariant = createServerFn({ method: "POST" })
     const sortOrder = asInt(maxRows[0]?.max ?? 0) + 1;
     try {
       const rows = await sql<{ id: number }>`
-        insert into variants (product_id, color, warehouse, remaining_cartons, remaining_sets, sort_order)
-        values (${data.productId}, ${data.color}, ${data.warehouse}, ${data.remainingCartons}, ${data.remainingSets}, ${sortOrder})
+        insert into variants (product_id, color, warehouse, packing_qty, packing_unit, remaining_cartons, remaining_sets, sort_order)
+        values (${data.productId}, ${data.color}, ${data.warehouse}, ${data.packingQty ?? null}, ${data.packingUnit ?? null}, ${data.remainingCartons}, ${data.remainingSets}, ${sortOrder})
         returning id
       `;
       return { id: rows[0]?.id };
@@ -383,6 +386,9 @@ export const createVariant = createServerFn({ method: "POST" })
 const updateVariantInput = z.object({
   id: z.number().int(),
   color: z.string().trim().min(1).max(20),
+  /** 数字=写入型号自己的装箱数量；null=清空、回退货号默认；省略=保持不变。 */
+  packingQty: z.number().int().positive().nullable().optional(),
+  packingUnit: z.string().trim().min(1).max(8).nullable().optional(),
 });
 
 export const updateVariant = createServerFn({ method: "POST" })
@@ -390,11 +396,26 @@ export const updateVariant = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const sql = await getSql();
     try {
-      await sql`
-        update variants
-        set color = ${data.color}, updated_at = now()
-        where id = ${data.id}
-      `;
+      if (data.packingQty === null) {
+        // 明确要求「跟随货号默认」：清掉型号级覆盖值。
+        await sql`
+          update variants
+          set color = ${data.color},
+              packing_qty = null,
+              packing_unit = null,
+              updated_at = now()
+          where id = ${data.id}
+        `;
+      } else {
+        await sql`
+          update variants
+          set color = ${data.color},
+              packing_qty = coalesce(${data.packingQty ?? null}, packing_qty),
+              packing_unit = coalesce(${data.packingUnit ?? null}, packing_unit),
+              updated_at = now()
+          where id = ${data.id}
+        `;
+      }
       return { ok: true as const };
     } catch (err) {
       if (isUniqueViolation(err)) throw new Error("该货号下已有此颜色");
@@ -441,9 +462,10 @@ export const recordMovement = createServerFn({ method: "POST" })
       throw new Error("请填写件数或套数");
     }
     const sql = await getSql();
-    const rows = await sql<VariantRow & { packing_qty: number }>`
-      select v.id, v.product_id, v.color, v.remaining_cartons, v.remaining_sets, v.sort_order,
-             p.packing_qty
+    const rows = await sql<VariantRow & { effective_packing_qty: number }>`
+      select v.id, v.product_id, v.color, v.warehouse, v.packing_qty, v.packing_unit,
+             v.remaining_cartons, v.remaining_sets, v.sort_order,
+             coalesce(v.packing_qty, p.packing_qty) as effective_packing_qty
       from variants v
       join products p on p.id = v.product_id
       where v.id = ${data.variantId}
@@ -462,7 +484,7 @@ export const recordMovement = createServerFn({ method: "POST" })
         variant.remaining_sets,
         data.cartons,
         data.sets,
-        variant.packing_qty,
+        variant.effective_packing_qty,
       );
       nextCartons = next.cartons;
       nextSets = next.sets;

@@ -123,6 +123,7 @@ export function ProductFormDialog({
   const [cartons, setCartons] = useState(0);
   const [sets, setSets] = useState(0);
   const [newCategory, setNewCategory] = useState("");
+  const [syncVariants, setSyncVariants] = useState(false);
 
   useEffect(() => {
     if (!state.open) return;
@@ -140,6 +141,7 @@ export function ProductFormDialog({
       setCartons(0);
       setSets(0);
     }
+    setSyncVariants(false);
     setNewCategory("");
   }, [state, categories]);
 
@@ -160,6 +162,7 @@ export function ProductFormDialog({
             sku: sku.trim(),
             packingQty,
             packingUnit: packingUnit.trim() || "个",
+            syncVariants,
           },
         });
         return;
@@ -192,7 +195,9 @@ export function ProductFormDialog({
         <DialogHeader>
           <DialogTitle>{editing ? "编辑货号" : "新增货品"}</DialogTitle>
           <DialogDescription>
-            {editing ? "修改货号、分类与装箱规格，颜色库存请在各行单独调整。" : "先建货号，并录入第一种颜色的库存。"}
+            {editing
+              ? "修改货号、分类与默认装箱规格；单个型号的装箱数量请在「编辑颜色」里单独设置。"
+              : "先建货号（装箱数量作为各型号的默认值），并录入第一种颜色的库存。"}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -228,7 +233,7 @@ export function ProductFormDialog({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
-              <Label htmlFor="packing-qty">装箱数量</Label>
+              <Label htmlFor="packing-qty">装箱数量{editing ? "（货号默认）" : ""}</Label>
               <Input
                 id="packing-qty"
                 type="number"
@@ -243,6 +248,22 @@ export function ProductFormDialog({
               <Input id="packing-unit" value={packingUnit} onChange={(e) => setPackingUnit(e.target.value)} />
             </div>
           </div>
+          {editing && (
+            <label className="flex items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-3.5 accent-primary"
+                checked={syncVariants}
+                onChange={(e) => setSyncVariants(e.target.checked)}
+              />
+              <span>
+                同时把装箱数量套用到该货号的<strong className="font-medium">所有颜色/型号</strong>
+                <span className="block text-muted-foreground">
+                  不勾选时：这里只是新增型号的默认值，各型号保留自己单独的装箱数量（如高 70、矮 105）。
+                </span>
+              </span>
+            </label>
+          )}
           {!editing && (
             <>
               <div className="grid gap-1.5">
@@ -281,15 +302,22 @@ export function VariantFormDialog({
   const [color, setColor] = useState("");
   const [cartons, setCartons] = useState(0);
   const [sets, setSets] = useState(0);
+  // 装箱数量按型号单独保存；留空表示跟随货号默认。
+  const [packingQty, setPackingQty] = useState("");
+  const [packingUnit, setPackingUnit] = useState("");
 
   useEffect(() => {
     if (!state.open) return;
     if (state.mode === "edit") {
       setColor(state.variant.color);
+      setPackingQty(String(state.variant.packingQty));
+      setPackingUnit(state.variant.packingUnit);
     } else {
       setColor("");
       setCartons(0);
       setSets(0);
+      setPackingQty(String(state.product.packingQty));
+      setPackingUnit(state.product.packingUnit);
     }
   }, [state]);
 
@@ -297,8 +325,17 @@ export function VariantFormDialog({
     mutationFn: async () => {
       if (!product) return;
       if (!color.trim()) throw new Error("请填写颜色");
+      const qtyText = packingQty.trim();
+      let qty: number | null = null;
+      if (qtyText !== "") {
+        qty = Number.parseInt(qtyText, 10);
+        if (!Number.isFinite(qty) || qty <= 0) throw new Error("装箱数量要填正整数，或留空跟随货号默认");
+      }
+      const unit = qty == null ? null : packingUnit.trim() || "个";
       if (editing) {
-        await updateVariant({ data: { id: editing.id, color: color.trim() } });
+        await updateVariant({
+          data: { id: editing.id, color: color.trim(), packingQty: qty, packingUnit: unit },
+        });
         return;
       }
       await createVariant({
@@ -308,6 +345,8 @@ export function VariantFormDialog({
           remainingCartons: cartons,
           remainingSets: sets,
           warehouse,
+          packingQty: qty ?? undefined,
+          packingUnit: unit ?? undefined,
         },
       });
     },
@@ -325,7 +364,9 @@ export function VariantFormDialog({
         <DialogHeader>
           <DialogTitle>{editing ? "编辑颜色" : "添加颜色"}</DialogTitle>
           <DialogDescription>
-            {product ? `${product.sku} · ${formatPacking(product.packingQty, product.packingUnit)}` : ""}
+            {product
+              ? `${product.sku} · 货号默认 ${formatPacking(product.packingQty, product.packingUnit)}`
+              : ""}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -339,6 +380,33 @@ export function VariantFormDialog({
             <Label htmlFor="variant-color">颜色及型号</Label>
             <Input id="variant-color" value={color} onChange={(e) => setColor(e.target.value)} placeholder="橙色" />
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="variant-packing-qty">装箱数量</Label>
+              <Input
+                id="variant-packing-qty"
+                type="number"
+                min={1}
+                inputMode="numeric"
+                className="tabular-nums"
+                value={packingQty}
+                placeholder="留空=跟随货号"
+                onChange={(e) => setPackingQty(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="variant-packing-unit">单位</Label>
+              <Input
+                id="variant-packing-unit"
+                value={packingUnit}
+                placeholder="个"
+                onChange={(e) => setPackingUnit(e.target.value)}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            同一货号的不同型号可以各装各的（如「高」70个/件、「矮」105个/件）；留空则跟随货号默认。
+          </p>
           {!editing && (
             <QtyFields id="variant-stock" cartons={cartons} sets={sets} onCartons={setCartons} onSets={setSets} />
           )}
@@ -421,6 +489,10 @@ export function MovementFormDialog({
             <DialogDescription>
               {state.product.sku} · {state.variant.color} · 现有{" "}
               {formatQty(state.variant.remainingCartons, state.variant.remainingSets)}
+              <span className="block">
+                装箱 {formatPacking(state.variant.packingQty, state.variant.packingUnit)}
+                {state.kind === "out" ? "，出库时按此规格把「件」折算成「套/个」" : ""}
+              </span>
             </DialogDescription>
           )}
         </DialogHeader>

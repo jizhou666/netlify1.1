@@ -32,6 +32,8 @@ type Preview = {
     category: string;
     sku: string;
     color: string;
+    packingQty: number;
+    packingUnit: string;
     cartons: number;
     sets: number;
   }[];
@@ -202,7 +204,8 @@ export function ImportDialog({
                     <tr className="text-left text-muted-foreground">
                       <th className="px-2 py-1 font-medium">行</th>
                       <th className="px-2 py-1 font-medium">货号</th>
-                      <th className="px-2 py-1 font-medium">颜色</th>
+                      <th className="px-2 py-1 font-medium">颜色及型号</th>
+                      <th className="px-2 py-1 font-medium">装箱</th>
                       <th className="px-2 py-1 text-right font-medium">件</th>
                       <th className="px-2 py-1 text-right font-medium">散</th>
                     </tr>
@@ -213,6 +216,10 @@ export function ImportDialog({
                         <td className="px-2 py-1 text-muted-foreground tabular-nums">{v.row}</td>
                         <td className="px-2 py-1">{v.sku}</td>
                         <td className="px-2 py-1">{v.color}</td>
+                        <td className="px-2 py-1 tabular-nums">
+                          {v.packingQty}
+                          {v.packingUnit}/件
+                        </td>
                         <td className="px-2 py-1 text-right tabular-nums">{v.cartons}</td>
                         <td className="px-2 py-1 text-right tabular-nums">{v.sets}</td>
                       </tr>

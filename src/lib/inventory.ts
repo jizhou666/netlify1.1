@@ -5,6 +5,9 @@ export type InventoryVariant = {
   productId: number;
   color: string;
   warehouse: string;
+  /** 该颜色行独立的装箱数（同货号不同型号可不同，如高70/矮105） */
+  packingQty: number;
+  packingUnit: string;
   remainingCartons: number;
   remainingSets: number;
   inCartons: number;
@@ -140,8 +143,9 @@ export function ledgerToCsv(payload: InventoryPayload): string {
   const lines = [header.map(csvCell).join(",")];
   for (const category of payload.categories) {
     for (const product of category.products) {
-      const packing = formatPacking(product.packingQty, product.packingUnit);
       for (const variant of product.variants) {
+        // 装箱数量按型号行导出（同一货号的高/矮可以不同）。
+        const packing = formatPacking(variant.packingQty, variant.packingUnit);
         const inbound =
           variant.inCartons === 0 && variant.inSets === 0
             ? ""
