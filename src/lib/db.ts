@@ -35,6 +35,13 @@ export interface Sql {
     text: string,
     params?: unknown[],
   ): Promise<T[]>;
+  /**
+   * Run fn inside one transaction (all-or-nothing). fn gets a plain
+   * `query(text, params)` runner bound to that transaction. Used by bulk
+   * writers (e.g. Excel import) where a mid-way failure must not leave the
+   * schema half-populated.
+   */
+  tx<T>(fn: (run: <R>(text: string, params?: unknown[]) => Promise<R[]>) => Promise<T>): Promise<T>;
 }
 
 /**
@@ -67,10 +74,11 @@ const OID_DATE = 1082;
 const OID_INTERVAL = 1186;
 const identity = (v: string) => v;
 
-type Run = <T>(text: string, params: unknown[]) => Promise<T[]>;
+type Run = <T>(text: string, params?: unknown[]) => Promise<T[]>;
+type TxFn = <T>(fn: (run: Run) => Promise<T>) => Promise<T>;
 
-/** Wrap a query runner in the tagged-template + `.query()` `Sql` surface. */
-function toSql(run: Run): Sql {
+/** Wrap a query runner in the tagged-template + `.query()` + `.tx()` `Sql` surface. */
+function toSql(run: Run, tx: TxFn): Sql {
   const sql = (async <T = Record<string, unknown>>(
     strings: TemplateStringsArray,
     ...values: unknown[]
@@ -82,7 +90,38 @@ function toSql(run: Run): Sql {
   }) as unknown as Sql;
   sql.query = <T = Record<string, unknown>>(text: string, params: unknown[] = []) =>
     run<T>(text, params);
+  sql.tx = tx;
   return sql;
+}
+
+/**
+ * Plain-SQL transaction helper for drivers without a native transaction object
+ * (node-postgres): BEGIN → fn → COMMIT, ROLLBACK on any error. One dedicated
+ * connection per transaction so concurrent callers never interleave.
+ */
+function makeTxRunner(connect: () => Promise<{ query: (text: string, params?: unknown[]) => Promise<{ rows: unknown[] }>; release: () => void }>): TxFn {
+  return async <T>(fn: (run: Run) => Promise<T>): Promise<T> => {
+    const client = await connect();
+    try {
+      await client.query("BEGIN");
+      const run: Run = async <R>(text: string, params: unknown[] = []) => {
+        const res = await client.query(text, params);
+        return res.rows as R[];
+      };
+      const out = await fn(run);
+      await client.query("COMMIT");
+      return out;
+    } catch (err) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        // connection died — keep the original error
+      }
+      throw err;
+    } finally {
+      client.release();
+    }
+  };
 }
 
 function createNeonSql(): Promise<Sql> {
@@ -163,10 +202,22 @@ function createNeonSql(): Promise<Sql> {
       // 不阻止连接创建——让后续查询自行报错，便于调试
     }
 
-    return toSql(async <T>(text: string, params: unknown[]) => {
-      const res = await pool.query(text, params);
-      return res.rows as T[];
-    });
+    return toSql(
+      async <T>(text: string, params: unknown[] = []) => {
+        const res = await pool.query(text, params);
+        return res.rows as T[];
+      },
+      makeTxRunner(async () => {
+        const client = await pool.connect();
+        return {
+          query: async (text: string, params: unknown[] = []) => {
+            const res = await client.query(text, params);
+            return { rows: res.rows };
+          },
+          release: () => client.release(),
+        };
+      }),
+    );
   })().catch((err) => {
     globalRef.__pgSqlPromise__ = undefined;
     throw err;
@@ -180,7 +231,19 @@ async function createPgliteSql(): Promise<Sql> {
   // data survives source edits (it resets on dev-server restart).
   globalRef.__pgliteInstance__ ??= (async () => {
     const { PGlite } = await import("@electric-sql/pglite");
+    const { join } = await import("node:path");
+    const { mkdirSync } = await import("node:fs");
+    // 局域网/本机部署时把数据写进磁盘（默认 ./data/pglite，可用
+    // PGLITE_DIR 环境变量改位置），重启进程不再丢数据。云端部署
+    // （设置了 DATABASE_URL）根本不会走到这里，不受影响。
+    const dataDir =
+      typeof process !== "undefined" && process.env.PGLITE_DIR?.trim()
+        ? process.env.PGLITE_DIR.trim()
+        : join(process.cwd(), "data", "pglite");
+    // PGLite 的 nodefs 只建最后一级目录，父级不存在会 ENOENT。
+    mkdirSync(dataDir, { recursive: true });
     const pg = new PGlite({
+      dataDir,
       parsers: {
         [OID_INT8]: Number,
         [OID_DATE]: identity,
@@ -230,10 +293,19 @@ async function createPgliteSql(): Promise<Sql> {
   globalRef.__pgliteMigrateChain__ = pass;
   await pass;
 
-  return toSql(async <T>(text: string, params: unknown[]) => {
-    const result = await pg.query<T>(text, params);
-    return result.rows;
-  });
+  return toSql(
+    async <T>(text: string, params: unknown[] = []) => {
+      const result = await pg.query<T>(text, params);
+      return result.rows;
+    },
+    async <T>(fn: (run: Run) => Promise<T>): Promise<T> =>
+      pg.transaction(async (tx) =>
+        fn(async <R>(text: string, params: unknown[] = []) => {
+          const res = await tx.query<R>(text, params);
+          return res.rows;
+        }),
+      ),
+  );
 }
 
 let sqlPromise: Promise<Sql> | null = null;

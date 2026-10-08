@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Download, FolderTree, Plus, Printer, Search, Warehouse } from "lucide-react";
+import { Download, FolderTree, Plus, Printer, Search, Upload, Warehouse } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ImportDialog } from "@/components/import-dialog";
 import {
   CategoryDialog,
   ConfirmDeleteDialog,
@@ -22,6 +23,7 @@ import {
   formatLedgerDate,
   ledgerToCsv,
   todayISO,
+  warehouseLabel,
   type CategoryOption,
   type InventoryPayload,
   type InventoryProduct,
@@ -49,6 +51,7 @@ export function InventoryApp({
   };
 }) {
   const [date, setDate] = useState(initial.date);
+  const [warehouse, setWarehouse] = useState(initial.inventory.warehouse || "芳村");
   const [search, setSearch] = useState("");
   const q = useDebounced(search, 200);
 
@@ -58,11 +61,15 @@ export function InventoryApp({
   const [history, setHistory] = useState<HistoryState>({ open: false });
   const [confirm, setConfirm] = useState<ConfirmState>({ open: false });
   const [categoryOpen, setCategoryOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const inventoryQuery = useQuery({
-    queryKey: ["inventory", date, q],
-    queryFn: () => listInventory({ data: { date, q } }),
-    initialData: date === initial.date && q === "" ? initial.inventory : undefined,
+    queryKey: ["inventory", date, q, warehouse],
+    queryFn: () => listInventory({ data: { date, q, warehouse } }),
+    initialData:
+      date === initial.date && q === "" && warehouse === initial.inventory.warehouse
+        ? initial.inventory
+        : undefined,
     placeholderData: keepPreviousData,
   });
 
@@ -107,7 +114,8 @@ export function InventoryApp({
                 芳村仓库存
               </h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                {data?.warehouseName ?? "芳村仓"} · {formatLedgerDate(date)}
+                {data?.warehouseName ?? "芳村仓"}
+                {data ? ` · ${warehouseLabel(data.warehouse)}` : ""} · {formatLedgerDate(date)}
               </p>
             </div>
           </div>
@@ -119,6 +127,10 @@ export function InventoryApp({
               className="w-[11.5rem] tabular-nums print:hidden"
               aria-label="台账日期"
             />
+            <Button variant="outline" className="print:hidden" onClick={() => setImportOpen(true)}>
+              <Upload className="size-4" />
+              <span className="hidden sm:inline">导入表格</span>
+            </Button>
             <Button variant="outline" className="print:hidden" onClick={() => setCategoryOpen(true)}>
               <FolderTree className="size-4" />
               分类
@@ -142,6 +154,30 @@ export function InventoryApp({
             </Button>
           </div>
         </header>
+
+        {data && data.warehouses.length > 1 && (
+          <div className="flex flex-wrap items-center gap-1.5 print:hidden" role="tablist" aria-label="仓库切换">
+            {data.warehouses.map((w) => {
+              const active = w === (data.warehouse ?? warehouse);
+              return (
+                <button
+                  key={w}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setWarehouse(w)}
+                  className={`rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                    active
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "border border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  }`}
+                >
+                  {warehouseLabel(w)}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {data ? (
           <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -203,12 +239,14 @@ export function InventoryApp({
       <ProductFormDialog
         state={productDialog}
         categories={categories}
+        warehouse={warehouse}
         onOpenChange={(open) => {
           if (!open) setProductDialog({ open: false });
         }}
       />
       <VariantFormDialog
         state={variantDialog}
+        warehouse={warehouse}
         onOpenChange={(open) => {
           if (!open) setVariantDialog({ open: false });
         }}
@@ -233,6 +271,7 @@ export function InventoryApp({
         }}
       />
       <CategoryDialog open={categoryOpen} onOpenChange={setCategoryOpen} categories={categories} />
+      <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
     </div>
   );
 }

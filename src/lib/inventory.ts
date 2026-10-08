@@ -4,6 +4,7 @@ export type InventoryVariant = {
   id: number;
   productId: number;
   color: string;
+  warehouse: string;
   remainingCartons: number;
   remainingSets: number;
   inCartons: number;
@@ -32,6 +33,10 @@ export type InventoryCategory = {
 
 export type InventoryPayload = {
   warehouseName: string;
+  /** 当前视图仓库（芳村 / 龙归 / …） */
+  warehouse: string;
+  /** 台账中出现过的全部仓库，供切换按钮渲染 */
+  warehouses: string[];
   date: string;
   categories: InventoryCategory[];
   stats: {
@@ -42,6 +47,11 @@ export type InventoryPayload = {
     todayOutLines: number;
   };
 };
+
+/** 仓库显示名：龙归 → 龙归仓；已带"仓"则原样。 */
+export function warehouseLabel(name: string): string {
+  return name.endsWith("仓") ? name : `${name}仓`;
+}
 
 export type CategoryOption = {
   id: number;

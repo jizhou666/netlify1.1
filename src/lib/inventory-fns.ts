@@ -29,6 +29,7 @@ type VariantRow = {
   id: number;
   product_id: number;
   color: string;
+  warehouse: string;
   remaining_cartons: number;
   remaining_sets: number;
   sort_order: number;
@@ -85,11 +86,15 @@ function subtractStock(
   return { cartons: nextCartons, sets: nextSets };
 }
 
-async function loadInventory(date: string, query: string): Promise<InventoryPayload> {
+async function loadInventory(
+  date: string,
+  query: string,
+  warehouse: string,
+): Promise<InventoryPayload> {
   const sql = await getSql();
   const pattern = `%${query.trim()}%`;
 
-  const [settingRows, categoryRows, productRows, variantRows, movementRows] =
+  const [settingRows, categoryRows, productRows, variantRows, movementRows, warehouseRows] =
     await Promise.all([
       sql<{ value: string }>`select value from app_settings where key = ${"warehouse_name"}`,
       sql<CategoryRow>`select id, name, sort_order from categories order by sort_order, id`,
@@ -99,10 +104,11 @@ async function loadInventory(date: string, query: string): Promise<InventoryPayl
         order by sort_order, id
       `,
       sql<VariantRow>`
-        select v.id, v.product_id, v.color, v.remaining_cartons, v.remaining_sets, v.sort_order
+        select v.id, v.product_id, v.color, v.warehouse, v.remaining_cartons, v.remaining_sets, v.sort_order
         from variants v
         join products p on p.id = v.product_id
-        where p.sku ilike ${pattern} or v.color ilike ${pattern}
+        where v.warehouse = ${warehouse}
+          and (p.sku ilike ${pattern} or v.color ilike ${pattern})
         order by v.sort_order, v.id
       `,
       sql<MovementAggRow>`
@@ -116,7 +122,18 @@ async function loadInventory(date: string, query: string): Promise<InventoryPayl
         where movement_date = ${date}
         group by variant_id
       `,
+      sql<{ warehouse: string }>`select distinct warehouse from variants order by warehouse`,
     ]);
+
+  // 仓库列表：芳村排最前（主仓），其余按名称排序；请求的仓库不存在时回落到第一个。
+  const allWarehouses = warehouseRows.map((r) => r.warehouse);
+  const warehouses = [
+    ...allWarehouses.filter((w) => w === "芳村" || w === "芳村仓"),
+    ...allWarehouses.filter((w) => w !== "芳村" && w !== "芳村仓").sort(),
+  ];
+  const current = warehouses.includes(warehouse)
+    ? warehouse
+    : (warehouses[0] ?? warehouse);
 
   const movementMap = new Map<number, MovementAggRow>();
   for (const row of movementRows) movementMap.set(row.variant_id, row);
@@ -141,7 +158,8 @@ async function loadInventory(date: string, query: string): Promise<InventoryPayl
     for (const product of productRows) {
       if (product.category_id !== category.id) continue;
       const vars = variantsByProduct.get(product.id) ?? [];
-      if (hasQuery && vars.length === 0) continue;
+      // 当前仓库没有颜色的货号不展示（它只存在于其他仓库）。
+      if (vars.length === 0) continue;
       productCount += 1;
       products.push({
         id: product.id,
@@ -164,6 +182,7 @@ async function loadInventory(date: string, query: string): Promise<InventoryPayl
             id: v.id,
             productId: v.product_id,
             color: v.color,
+            warehouse: v.warehouse,
             remainingCartons: v.remaining_cartons,
             remainingSets: v.remaining_sets,
             inCartons,
@@ -175,7 +194,7 @@ async function loadInventory(date: string, query: string): Promise<InventoryPayl
         }),
       });
     }
-    if (hasQuery && products.length === 0) continue;
+    if (products.length === 0) continue;
     categories.push({
       id: category.id,
       name: category.name,
@@ -186,6 +205,8 @@ async function loadInventory(date: string, query: string): Promise<InventoryPayl
 
   return {
     warehouseName: settingRows[0]?.value ?? "芳村仓",
+    warehouse: current,
+    warehouses: warehouses.length > 0 ? warehouses : [current],
     date,
     categories,
     stats: {
@@ -201,11 +222,12 @@ async function loadInventory(date: string, query: string): Promise<InventoryPayl
 const dateInput = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   q: z.string().optional(),
+  warehouse: z.string().trim().min(1).max(20).default("芳村"),
 });
 
 export const listInventory = createServerFn({ method: "POST" })
   .validator((input: unknown) => dateInput.parse(input))
-  .handler(async ({ data }) => loadInventory(data.date, data.q ?? ""));
+  .handler(async ({ data }) => loadInventory(data.date, data.q ?? "", data.warehouse));
 
 export const listCategories = createServerFn({ method: "GET" }).handler(async () => {
   const sql = await getSql();
@@ -269,6 +291,7 @@ const createProductInput = z.object({
   color: z.string().trim().min(1).max(20),
   remainingCartons: z.number().int().min(0),
   remainingSets: z.number().int().min(0),
+  warehouse: z.string().trim().min(1).max(20).default("芳村"),
 });
 
 export const createProduct = createServerFn({ method: "POST" })
@@ -287,8 +310,8 @@ export const createProduct = createServerFn({ method: "POST" })
     const productId = products[0]?.id;
     if (!productId) throw new Error("新增货品失败");
     await sql`
-      insert into variants (product_id, color, remaining_cartons, remaining_sets, sort_order)
-      values (${productId}, ${data.color}, ${data.remainingCartons}, ${data.remainingSets}, 1)
+      insert into variants (product_id, color, warehouse, remaining_cartons, remaining_sets, sort_order)
+      values (${productId}, ${data.color}, ${data.warehouse}, ${data.remainingCartons}, ${data.remainingSets}, 1)
     `;
     return { id: productId };
   });
@@ -332,6 +355,7 @@ const createVariantInput = z.object({
   color: z.string().trim().min(1).max(20),
   remainingCartons: z.number().int().min(0),
   remainingSets: z.number().int().min(0),
+  warehouse: z.string().trim().min(1).max(20).default("芳村"),
 });
 
 export const createVariant = createServerFn({ method: "POST" })
@@ -339,18 +363,19 @@ export const createVariant = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const sql = await getSql();
     const maxRows = await sql<{ max: number | null }>`
-      select max(sort_order) as max from variants where product_id = ${data.productId}
+      select max(sort_order) as max from variants
+      where product_id = ${data.productId} and warehouse = ${data.warehouse}
     `;
     const sortOrder = asInt(maxRows[0]?.max ?? 0) + 1;
     try {
       const rows = await sql<{ id: number }>`
-        insert into variants (product_id, color, remaining_cartons, remaining_sets, sort_order)
-        values (${data.productId}, ${data.color}, ${data.remainingCartons}, ${data.remainingSets}, ${sortOrder})
+        insert into variants (product_id, color, warehouse, remaining_cartons, remaining_sets, sort_order)
+        values (${data.productId}, ${data.color}, ${data.warehouse}, ${data.remainingCartons}, ${data.remainingSets}, ${sortOrder})
         returning id
       `;
       return { id: rows[0]?.id };
     } catch (err) {
-      if (isUniqueViolation(err)) throw new Error("该货号下已有此颜色");
+      if (isUniqueViolation(err)) throw new Error("该仓库此货号下已有此颜色");
       throw err;
     }
   });
@@ -383,9 +408,10 @@ export const deleteVariant = createServerFn({ method: "POST" })
   .validator((input: unknown) => deleteVariantInput.parse(input))
   .handler(async ({ data }) => {
     const sql = await getSql();
-    const product = await sql<{ product_id: number; count: number }>`
-      select v.product_id, (
-        select count(*)::int from variants v2 where v2.product_id = v.product_id
+    const product = await sql<{ product_id: number; warehouse: string; count: number }>`
+      select v.product_id, v.warehouse, (
+        select count(*)::int from variants v2
+        where v2.product_id = v.product_id and v2.warehouse = v.warehouse
       ) as count
       from variants v
       where v.id = ${data.id}
@@ -393,7 +419,7 @@ export const deleteVariant = createServerFn({ method: "POST" })
     const row = product[0];
     if (!row) throw new Error("颜色不存在");
     if (asInt(row.count) <= 1) {
-      throw new Error("至少保留一种颜色，如需删除请直接删除货号");
+      throw new Error("该仓库至少保留一种颜色，如需清空请直接删除货号");
     }
     await sql`delete from variants where id = ${data.id}`;
     return { ok: true as const };

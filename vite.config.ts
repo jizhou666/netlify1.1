@@ -150,6 +150,9 @@ export default defineConfig(({ command, isPreview }) => ({
     host: "0.0.0.0",
     port: 8080,
     strictPort: true,
+    // cpolar 内网穿透：Vite 默认拒绝未知 Host（返回 403），
+    // 加入隧道域名后缀后同事才能从公网链接访问。
+    allowedHosts: [".cpolar.top", ".cpolar.io", "127.0.0.1", "localhost"],
   },
   preview: {
     host: "127.0.0.1",
@@ -171,8 +174,17 @@ export default defineConfig(({ command, isPreview }) => ({
       ? [
           nitro({
             // Netlify CI sets NETLIFY=true and auto-detects this preset.
+            // SELF_HOST=1 → 本机长期托管：输出可用 node 直接运行的正式构建，
+            //   替代开发模式逐模块请求（经隧道会放大成几十秒白屏）。
             // Grok / Vercel builds keep the vercel output the platform expects.
-            preset: process.env.NETLIFY ? "netlify" : "vercel",
+            preset: process.env.NETLIFY
+              ? "netlify"
+              : process.env.SELF_HOST
+                ? "node_server"
+                : "vercel",
+            // 本机隧道带宽小（实测下行 ~130KB/s）：构建期预生成 .gz/.br，
+            // 静态 JS/CSS 直接按压缩字节传输（500KB → ~160KB）。
+            compressPublicAssets: process.env.SELF_HOST ? { gzip: true, brotli: false } : false,
             // Auto-registers server/middleware/* (the PWA install page +
             // manifest + head-tag middleware). Nitro v3 defaults serverDir to
             // false, so removing this silently unwires /?install=1 on deploys.

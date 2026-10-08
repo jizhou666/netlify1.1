@@ -35,5 +35,18 @@ yarn-error.log*
 # Screenshots (browser QA)
 screenshots/
 
+# 本地部署：隧道程序与本地数据库文件不入库
+tools/
+data/
+
+# 会话任务临时目录（解析 profile / 验证脚本）
+tasks/
+
+# 业务数据附件（库存共享压缩包/截图）不入公开仓库
+attachments/
+
+# 命令误产生的空文件
+{}
+
 # TypeScript build cache
 *.tsbuildinfo

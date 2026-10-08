@@ -106,10 +106,12 @@ export function ProductFormDialog({
   state,
   onOpenChange,
   categories,
+  warehouse,
 }: {
   state: ProductDialogState;
   onOpenChange: (open: boolean) => void;
   categories: CategoryOption[];
+  warehouse: string;
 }) {
   const qc = useQueryClient();
   const editing = state.open && state.mode === "edit" ? state.product : null;
@@ -172,6 +174,7 @@ export function ProductFormDialog({
           color: color.trim(),
           remainingCartons: cartons,
           remainingSets: sets,
+          warehouse,
         },
       });
     },
@@ -266,9 +269,11 @@ export function ProductFormDialog({
 export function VariantFormDialog({
   state,
   onOpenChange,
+  warehouse,
 }: {
   state: VariantDialogState;
   onOpenChange: (open: boolean) => void;
+  warehouse: string;
 }) {
   const qc = useQueryClient();
   const editing = state.open && state.mode === "edit" ? state.variant : null;
@@ -302,6 +307,7 @@ export function VariantFormDialog({
           color: color.trim(),
           remainingCartons: cartons,
           remainingSets: sets,
+          warehouse,
         },
       });
     },

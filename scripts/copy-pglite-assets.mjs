@@ -13,7 +13,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const srcDir = join(root, "node_modules/@electric-sql/pglite/dist");
 const assets = ["pglite.data", "pglite.wasm", "initdb.wasm"];
 
-const bundles = globSync("{.vercel/output,.netlify}/**/*electric-sql__pglite.mjs", {
+const bundles = globSync("{.vercel/output,.netlify,.output}/**/*electric-sql__pglite.mjs", {
   cwd: root,
 });
 

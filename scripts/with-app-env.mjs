@@ -111,18 +111,37 @@ function main(argv) {
     process.exit(2);
   }
   const env = mergeAppEnv(readAppEnv(projectRoot()), process.env);
-  const child = spawn(command, args, { stdio: "inherit", env });
-  // The dev server is long-running and is stopped by signalling this wrapper.
-  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
-    process.on(signal, () => child.kill(signal));
-  }
-  child.on("error", (err) => {
+
+  const attach = (child) => {
+    // The dev server is long-running and is stopped by signalling this wrapper.
+    for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+      process.on(signal, () => child.kill(signal));
+    }
+    child.on("exit", (code, signal) => {
+      process.exit(exitStatusFromChild(code, signal));
+    });
+  };
+
+  const spawnChild = (opts) => spawn(command, args, { stdio: "inherit", env, ...opts });
+  const child = spawnChild({});
+  child.once("error", (err) => {
+    // Windows 上 npm 的 bin 是 .cmd shim，无 shell 的 spawn 找不到它
+    // （spawn vite ENOENT）。仅 win32 且 ENOENT 时降级为 shell 重试一次；
+    // 带空格全路径的命令（测试里的 node.exe）走不到这条分支，
+    // Linux/macOS 行为完全不变。
+    if (process.platform === "win32" && err?.code === "ENOENT") {
+      const viaShell = spawnChild({ shell: true });
+      viaShell.on("error", (e2) => {
+        console.error(`[with-app-env] failed to run ${command}:`, e2?.message || e2);
+        process.exit(127);
+      });
+      attach(viaShell);
+      return;
+    }
     console.error(`[with-app-env] failed to run ${command}:`, err?.message || err);
     process.exit(127);
   });
-  child.on("exit", (code, signal) => {
-    process.exit(exitStatusFromChild(code, signal));
-  });
+  attach(child);
 }
 
 if (isMainModule(import.meta.url)) {
