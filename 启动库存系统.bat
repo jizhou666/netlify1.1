@@ -7,6 +7,21 @@ rem 重要：本文件必须用 CRLF 换行保存（.gitattributes 已锁定 *.b
 rem       若只有 LF 换行，cmd 会把每行拆错，报「不是内部或外部命令」。
 pushd "%~dp0"
 
+rem ── 数据库：有 DATABASE_URL 就用云端 Neon 库，没有就用本机内嵌库 ──
+rem 两种给法（任选其一）：
+rem   1) 在项目目录建一个 .env.local，写一行：DATABASE_URL=你的 Neon 连接串
+rem      （.env.local 已在 .gitignore 里，不会被提交）
+rem   2) 系统环境变量里设置 DATABASE_URL
+set "ENVFILE_DB="
+if exist ".env.local" (
+  for /f "usebackq tokens=1,* delims==" %%A in (".env.local") do (
+    if /i "%%A"=="DATABASE_URL" if not "%%B"=="" set "ENVFILE_DB=%%B"
+  )
+)
+if defined ENVFILE_DB set "DATABASE_URL=%ENVFILE_DB%"
+set "DBINFO=本地内嵌库（数据只在这台电脑）"
+if defined DATABASE_URL set "DBINFO=云端库 Neon（多台电脑共用一份数据）"
+
 set "NEED_BUILD="
 if /i "%~1"=="rebuild" set "NEED_BUILD=1"
 if not exist ".output\server\index.mjs" set "NEED_BUILD=1"
@@ -45,6 +60,7 @@ start "cpolar-tunnel" cmd /k "tools\cpolar\cpolar.exe http 8080"
 
 echo.
 echo 启动完成！
+echo   数据来源:  %DBINFO%
 echo   本机访问:  http://localhost:8080
 echo   查看公网地址: 浏览器打开  http://127.0.0.1:4040
 echo   （也可登录 dashboard.cpolar.com 状态页查看隧道网址）
