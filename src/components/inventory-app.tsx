@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Download, FolderTree, Plus, Printer, Search, Upload, Warehouse } from "lucide-react";
+import { Download, CloudUpload, FolderTree, Plus, Printer, Search, Upload, Warehouse } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ImportDialog } from "@/components/import-dialog";
+import { CloudSyncDialog } from "@/components/cloud-sync-dialog";
 import {
   CategoryDialog,
   ConfirmDeleteDialog,
@@ -62,6 +63,7 @@ export function InventoryApp({
   const [confirm, setConfirm] = useState<ConfirmState>({ open: false });
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [cloudOpen, setCloudOpen] = useState(false);
 
   const inventoryQuery = useQuery({
     queryKey: ["inventory", date, q, warehouse],
@@ -130,6 +132,10 @@ export function InventoryApp({
             <Button variant="outline" className="print:hidden" onClick={() => setImportOpen(true)}>
               <Upload className="size-4" />
               <span className="hidden sm:inline">导入表格</span>
+            </Button>
+            <Button variant="outline" className="print:hidden" onClick={() => setCloudOpen(true)}>
+              <CloudUpload className="size-4" />
+              <span className="hidden sm:inline">云端同步</span>
             </Button>
             <Button variant="outline" className="print:hidden" onClick={() => setCategoryOpen(true)}>
               <FolderTree className="size-4" />
@@ -272,6 +278,7 @@ export function InventoryApp({
       />
       <CategoryDialog open={categoryOpen} onOpenChange={setCategoryOpen} categories={categories} />
       <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
+      <CloudSyncDialog open={cloudOpen} onOpenChange={setCloudOpen} />
     </div>
   );
 }

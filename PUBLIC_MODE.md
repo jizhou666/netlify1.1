@@ -4,9 +4,19 @@
 
 ## 数据
 
-- 库存通过服务端写入 Postgres（Neon）
-- 预览环境没有数据库连接时，会使用内嵌库，刷新进程后数据会重置
-- 正式发布必须配置 `DATABASE_URL`
+两种跑法，`.env.local` 里换一个变量名就能切：
+
+| 变量 | 含义 |
+| --- | --- |
+| （都不写） | 台账跑本机内嵌库 `data/pglite`，断网也能用，数据只在这台电脑 |
+| `SYNC_DATABASE_URL` | 本机库照常用，另外把 Neon 当作上传目标：页面上「云端同步」按钮可一键把整套台账推上去 |
+| `DATABASE_URL` | 应用直接读写云端 Neon 库（各处实时一致，依赖网络） |
+
+- 「云端同步」是**整份覆盖**：清空云端的分类/货号/型号/出入库流水，再按原 id 写入本机台账，并记录同步时间。
+  迁移用 `_migrations` 记账，同一个库只建表一次，重复同步安全。
+- 部署到 Netlify / Vercel 时不用 `.env.local`：平台注入 `DATABASE_URL`，应用直接以云端库为准。
+- 连接串（含密码）只放在 `.env.local`（已被 `.gitignore` 忽略）或平台环境变量里，不要提交。
+- 配置样例见 `.env.local.example`；命令行搬运兜底脚本：`node --experimental-strip-types tasks/copy-pglite-to-target.mjs`。
 
 ## Netlify
 
