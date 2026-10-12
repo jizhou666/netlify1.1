@@ -50,14 +50,14 @@ function RowMenu({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           aria-label="操作"
-          title="点击这里：入库 / 出库 / 修正库存 / 编辑颜色、货号"
-          className="h-9 w-9 justify-center border-rule bg-card p-0 text-muted-foreground transition-colors hover:border-primary/60 hover:bg-primary/5 hover:text-primary data-[state=open]:border-primary data-[state=open]:bg-primary/5 data-[state=open]:text-primary md:h-8 md:w-auto md:gap-1 md:px-2.5 print:hidden"
+          title="入库 / 出库 / 修正库存 / 编辑颜色、货号"
+          className="h-9 w-9 justify-center rounded-full p-0 text-muted-foreground transition-colors hover:bg-accent hover:text-primary focus-visible:bg-accent data-[state=open]:bg-accent data-[state=open]:text-primary md:h-8 md:w-auto md:gap-1 md:px-2.5 md:text-muted-foreground/60 md:group-hover/row:bg-accent/60 md:group-hover/row:text-foreground print:hidden"
         >
           <MoreHorizontal className="size-4" />
-          <span className="hidden md:inline">操作</span>
+          <span className="hidden text-xs md:inline">操作</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
@@ -101,7 +101,7 @@ export function LedgerTable({
             <th className="px-3 py-3 font-medium">本日入</th>
             <th className="px-3 py-3 font-medium">本日出</th>
             <th className="px-3 py-3 font-medium">剩余数量</th>
-            <th className="w-28 px-3 py-3 text-right font-medium print:hidden">操作</th>
+            <th className="w-20 px-3 py-3 text-right font-medium print:hidden">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -189,7 +189,7 @@ function ProductRows({
           cell.qty === product.packingQty &&
           cell.unit === product.packingUnit;
         return (
-          <tr key={variant.id} className="border-t border-rule/80 hover:bg-muted/40">
+          <tr key={variant.id} className="group/row border-t border-rule/80 transition-colors hover:bg-muted/40">
             {index === 0 ? (
               <td
                 rowSpan={product.variants.length}
