@@ -49,8 +49,15 @@ function RowMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="操作" className="print:hidden">
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label="操作"
+          title="点击这里：入库 / 出库 / 修正库存 / 编辑颜色、货号"
+          className="h-9 w-9 justify-center border-rule bg-card p-0 text-muted-foreground transition-colors hover:border-primary/60 hover:bg-primary/5 hover:text-primary data-[state=open]:border-primary data-[state=open]:bg-primary/5 data-[state=open]:text-primary md:h-8 md:w-auto md:gap-1 md:px-2.5 print:hidden"
+        >
           <MoreHorizontal className="size-4" />
+          <span className="hidden md:inline">操作</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
@@ -94,9 +101,7 @@ export function LedgerTable({
             <th className="px-3 py-3 font-medium">本日入</th>
             <th className="px-3 py-3 font-medium">本日出</th>
             <th className="px-3 py-3 font-medium">剩余数量</th>
-            <th className="w-12 px-2 py-3 print:hidden">
-              <span className="sr-only">操作</span>
-            </th>
+            <th className="w-28 px-3 py-3 text-right font-medium print:hidden">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -217,7 +222,7 @@ function ProductRows({
             <td className="px-3 py-3 font-medium">
               <QtyCell cartons={variant.remainingCartons} sets={variant.remainingSets} />
             </td>
-            <td className="px-2 py-2 text-right print:hidden">
+            <td className="px-3 py-2 text-right print:hidden">
               <RowMenu product={product} variant={variant} handlers={handlers} />
             </td>
           </tr>
