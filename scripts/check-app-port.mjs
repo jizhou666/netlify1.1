@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 8080 端口状态探测（给「启动库存系统.bat」用）。
+ * 8080 端口状态探测（给「启动库存系统.bat」和常驻看守用）。
  *
  * 只打印一个词，方便 .bat 用 for /f 取：
  *   OURS  8080 上是我们的库存应用（HTTP 200 且页面带应用名）
@@ -11,16 +11,14 @@
  * 端口可用 APP_PORT 覆盖（默认 8080）。
  */
 import http from "node:http";
+import { pathToFileURL } from "node:url";
 
 const MARKER = "芳村仓库存";
-const args = process.argv.slice(2);
-const waitIndex = args.indexOf("--wait");
-const waitSeconds = waitIndex >= 0 ? Number(args[waitIndex + 1] ?? 0) : 0;
-const port = Number(process.env.APP_PORT ?? 8080);
 const TIMEOUT_MS = 3000;
 const MAX_BODY = 200_000; // 应用首页约 2MB，只读前面一段找标记就够
 
-function probe() {
+/** 返回 "OURS" | "OTHER" | "DOWN"。 */
+export function probeApp(port = Number(process.env.APP_PORT ?? 8080)) {
   return new Promise((resolve) => {
     const req = http.get(
       { host: "127.0.0.1", port, path: "/", timeout: TIMEOUT_MS },
@@ -44,12 +42,23 @@ function probe() {
   });
 }
 
-const deadline = Date.now() + Math.max(0, waitSeconds) * 1000;
-let state = await probe();
-while (state !== "OURS" && Date.now() < deadline) {
-  await new Promise((resolve) => setTimeout(resolve, 1000));
-  state = await probe();
+async function main() {
+  const args = process.argv.slice(2);
+  const waitIndex = args.indexOf("--wait");
+  const waitSeconds = waitIndex >= 0 ? Number(args[waitIndex + 1] ?? 0) : 0;
+  const port = Number(process.env.APP_PORT ?? 8080);
+
+  const deadline = Date.now() + Math.max(0, waitSeconds) * 1000;
+  let state = await probeApp(port);
+  while (state !== "OURS" && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    state = await probeApp(port);
+  }
+
+  process.stdout.write(`${state}\n`);
+  process.exit(state === "OURS" ? 0 : 1);
 }
 
-process.stdout.write(`${state}\n`);
-process.exit(state === "OURS" ? 0 : 1);
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
+}

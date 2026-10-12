@@ -2,6 +2,7 @@
 # 报「不是内部或外部命令 / 命令语法不正确」。
 *.bat text eol=crlf
 *.cmd text eol=crlf
+*.vbs text eol=crlf
 
 # Linux/服务器上的脚本保持 LF（Netlify / Vercel 构建机按 LF 执行）。
 *.sh text eol=lf

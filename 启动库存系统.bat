@@ -59,7 +59,7 @@ if defined FORCE_RESTART (
 )
 if /i "%APPSTATE%"=="OURS" (
   echo [1/2] 库存应用已在运行，跳过启动：http://localhost:8080
-  echo        想换成自己的窗口，先关掉 8080 上的进程，或运行「启动库存系统.bat restart」。
+  echo        想清掉它重来，运行「启动库存系统.bat restart」。
   goto tunnel
 )
 if /i "%APPSTATE%"=="OTHER" (
@@ -70,20 +70,20 @@ if /i "%APPSTATE%"=="OTHER" (
 )
 
 :startapp
-rem DOWN 或 restart：清掉残留，开自己的窗口
+rem DOWN 或 restart：清掉残留，交给「常驻看守」启动（隐藏运行，崩了自动重启）
 call :killport
 echo [1/2] 启动库存应用服务 (http://localhost:8080) ...
-start "inventory-app" cmd /k "set PORT=8080 && set HOST=0.0.0.0 && node .output\server\index.mjs"
+start "" wscript.exe "scripts\start-watchdog.vbs"
 
 rem 等它真的应答（最多 40 秒）：起不来就直说，不再出现「看着启动了其实没起」
 node scripts\check-app-port.mjs --wait 40 >nul
 if errorlevel 1 (
   echo.
-  echo [错误] 等了 40 秒还没等到应用就绪。请看新开窗口里的报错；
+  echo [错误] 等了 40 秒还没等到应用就绪。报错见 data\watchdog.log；
   echo        常见原因：8080 被别的程序占用、Node 版本过低、构建产物损坏
   echo        （可运行「启动库存系统.bat rebuild」重新构建）。
 ) else (
-  echo [1/2] 应用已就绪：http://localhost:8080
+  echo [1/2] 应用已就绪（常驻看守托管，崩了会自动重启）：http://localhost:8080
 )
 
 :tunnel

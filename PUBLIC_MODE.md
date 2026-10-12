@@ -18,6 +18,22 @@
 - 连接串（含密码）只放在 `.env.local`（已被 `.gitignore` 忽略）或平台环境变量里，不要提交。
 - 配置样例见 `.env.local.example`；命令行搬运兜底脚本：`node --experimental-strip-types tasks/copy-pglite-to-target.mjs`。
 
+## 常驻运行（同事随时能打开）
+
+内网穿透只是转发，**真正要一直活着的是 8080 上的应用**；应用一没，同事就会看到
+`Tunnel unavailable … must be running on port 8080`。为此有「常驻看守」`scripts/serve-inventory.mjs`：
+
+- 每 30 秒看一眼：是我们自己的应用就什么都不做；没人应答就重新拉起来；应用崩了 5 秒后自动重启
+- 端口被别的程序占用时只记日志、不抢不杀，避免误伤
+- 日志：`data/watchdog.log`；自检：`node scripts/serve-inventory.mjs --check`（输出 OURS / OTHER / DOWN）
+- 启动：双击 **`启动库存系统.bat`**（会自动带上看守 + 隧道；端口上已有我们的应用就只开隧道）
+  - 情况不对时用 `启动库存系统.bat restart`：清掉 8080 上的残留进程再重启
+  - 改了代码要重建：`启动库存系统.bat rebuild`
+- 停止：双击 **`停止库存看守.bat`**（应用和看守一起停，同事的链接会打不开）
+- 登录自启：`scripts/start-watchdog.vbs`（隐藏窗口）。本机已放一份到
+  `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\`，不想要就删掉那个文件
+- 换机器时：把 `.env.local` 和「启动」文件夹里的自启文件一起拷过去
+
 ## Netlify
 
 1. 用 Git 导入本项目，或把构建产物按 Netlify 站点发布
