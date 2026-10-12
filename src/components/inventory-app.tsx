@@ -12,11 +12,13 @@ import {
   HistorySheet,
   MovementFormDialog,
   ProductFormDialog,
+  RowActionDialog,
   VariantFormDialog,
   type ConfirmState,
   type HistoryState,
   type MovementDialogState,
   type ProductDialogState,
+  type RowActionState,
   type VariantDialogState,
 } from "@/components/inventory-dialogs";
 import { LedgerCards, LedgerTable, type LedgerHandlers } from "@/components/ledger-table";
@@ -61,6 +63,7 @@ export function InventoryApp({
   const [movementDialog, setMovementDialog] = useState<MovementDialogState>({ open: false });
   const [history, setHistory] = useState<HistoryState>({ open: false });
   const [confirm, setConfirm] = useState<ConfirmState>({ open: false });
+  const [rowActions, setRowActions] = useState<RowActionState>({ open: false });
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [cloudOpen, setCloudOpen] = useState(false);
@@ -93,6 +96,7 @@ export function InventoryApp({
         setVariantDialog({ open: true, mode: "edit", product, variant }),
       onDeleteVariant: (product, variant) =>
         setConfirm({ open: true, type: "variant", product, variant }),
+      onOpenActions: (product, variant) => setRowActions({ open: true, product, variant }),
       onMove: (kind: MovementKind, product: InventoryProduct, variant: InventoryVariant) =>
         setMovementDialog({ open: true, kind, product, variant }),
       onHistory: (product, variant) => setHistory({ open: true, product, variant }),
@@ -269,6 +273,19 @@ export function InventoryApp({
         onOpenChange={(open) => {
           if (!open) setHistory({ open: false });
         }}
+      />
+      <RowActionDialog
+        state={rowActions}
+        onOpenChange={(open) => {
+          if (!open) setRowActions({ open: false });
+        }}
+        onMove={handlers.onMove}
+        onHistory={handlers.onHistory}
+        onAddVariant={handlers.onAddVariant}
+        onEditVariant={handlers.onEditVariant}
+        onEditProduct={handlers.onEditProduct}
+        onDeleteVariant={handlers.onDeleteVariant}
+        onDeleteProduct={handlers.onDeleteProduct}
       />
       <ConfirmDeleteDialog
         state={confirm}

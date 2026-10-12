@@ -1,6 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  History,
+  Pencil,
+  Plus,
+  SlidersHorizontal,
+  Tag,
+  Trash2,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -95,6 +106,171 @@ export type ConfirmState =
       product: InventoryProduct;
       variant: InventoryVariant;
     };
+
+/** 每行「操作」按钮打开的弹窗：出入库、查看、编辑、删除都在这里。 */
+export type RowActionState =
+  | { open: false }
+  | { open: true; product: InventoryProduct; variant: InventoryVariant };
+
+export function RowActionDialog({
+  state,
+  onOpenChange,
+  onMove,
+  onHistory,
+  onAddVariant,
+  onEditVariant,
+  onEditProduct,
+  onDeleteVariant,
+  onDeleteProduct,
+}: {
+  state: RowActionState;
+  onOpenChange: (open: boolean) => void;
+  onMove: (kind: MovementKind, product: InventoryProduct, variant: InventoryVariant) => void;
+  onHistory: (product: InventoryProduct, variant: InventoryVariant) => void;
+  onAddVariant: (product: InventoryProduct) => void;
+  onEditVariant: (product: InventoryProduct, variant: InventoryVariant) => void;
+  onEditProduct: (product: InventoryProduct) => void;
+  onDeleteVariant: (product: InventoryProduct, variant: InventoryVariant) => void;
+  onDeleteProduct: (product: InventoryProduct) => void;
+}) {
+  const product = state.open ? state.product : null;
+  const variant = state.open ? state.variant : null;
+
+  // 先关掉本弹窗，再打开对应的功能弹窗，避免叠在一起
+  const run = (action: () => void) => () => {
+    onOpenChange(false);
+    action();
+  };
+
+  return (
+    <Dialog open={state.open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{product?.sku ?? "操作"}</DialogTitle>
+          <DialogDescription>
+            {variant ? `${variant.color} · ` : ""}
+            现有 {variant ? formatQty(variant.remainingCartons, variant.remainingSets) : ""} · 装箱{" "}
+            {variant ? formatPacking(variant.packingQty, variant.packingUnit) : ""}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4">
+          <ActionGroup title="出入库">
+            <ActionButton
+              icon={ArrowDownToLine}
+              label="入库"
+              hint="登记今天进来的货"
+              onClick={run(() => product && variant && onMove("in", product, variant))}
+            />
+            <ActionButton
+              icon={ArrowUpFromLine}
+              label="出库"
+              hint="按装箱规格折算件/套"
+              onClick={run(() => product && variant && onMove("out", product, variant))}
+            />
+            <ActionButton
+              icon={SlidersHorizontal}
+              label="修正库存"
+              hint="盘点后直接改成实际数"
+              onClick={run(() => product && variant && onMove("adjust", product, variant))}
+            />
+            <ActionButton
+              icon={History}
+              label="出入库流水"
+              hint="看这个型号的历史记录"
+              onClick={run(() => product && variant && onHistory(product, variant))}
+            />
+          </ActionGroup>
+
+          <ActionGroup title="资料维护">
+            <ActionButton
+              icon={Plus}
+              label="添加颜色/型号"
+              hint="给这个货号加一行"
+              onClick={run(() => product && onAddVariant(product))}
+            />
+            <ActionButton
+              icon={Pencil}
+              label="编辑颜色/型号"
+              hint="改名称、装箱数量"
+              onClick={run(() => product && variant && onEditVariant(product, variant))}
+            />
+            <ActionButton
+              icon={Tag}
+              label="编辑货号"
+              hint="改货号名、分类、默认装箱"
+              onClick={run(() => product && onEditProduct(product))}
+            />
+          </ActionGroup>
+
+          <ActionGroup title="删除" danger>
+            <ActionButton
+              icon={Trash2}
+              label="删除这个颜色/型号"
+              onClick={run(() => product && variant && onDeleteVariant(product, variant))}
+            />
+            <ActionButton
+              icon={Trash2}
+              label="删除整个货号"
+              hint="连同它所有颜色和流水"
+              onClick={run(() => product && onDeleteProduct(product))}
+            />
+          </ActionGroup>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ActionGroup({
+  title,
+  danger,
+  children,
+}: {
+  title: string;
+  danger?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <section className="grid gap-1.5">
+      <h3
+        className={cn(
+          "text-xs font-medium tracking-wide",
+          danger ? "text-primary" : "text-muted-foreground",
+        )}
+      >
+        {title}
+      </h3>
+      <div className="grid gap-1.5 sm:grid-cols-2">{children}</div>
+    </section>
+  );
+}
+
+function ActionButton({
+  icon: Icon,
+  label,
+  hint,
+  onClick,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  hint?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-start gap-2.5 rounded-md border border-border bg-card px-3 py-2 text-left transition-colors hover:border-primary/50 hover:bg-primary/5 focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+    >
+      <Icon className="mt-0.5 size-4 shrink-0 text-primary" />
+      <span className="min-w-0">
+        <span className="block text-sm font-medium">{label}</span>
+        {hint ? <span className="block text-xs text-muted-foreground">{hint}</span> : null}
+      </span>
+    </button>
+  );
+}
 
 function invalidateInventory(qc: ReturnType<typeof useQueryClient>) {
   void qc.invalidateQueries({ queryKey: ["inventory"] });

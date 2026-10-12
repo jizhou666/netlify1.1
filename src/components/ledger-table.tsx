@@ -1,12 +1,4 @@
-import { MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { ColorLabel } from "@/components/inventory-dialogs";
 import {
   formatPacking,
@@ -27,6 +19,8 @@ export type LedgerHandlers = {
   onDeleteVariant: (product: InventoryProduct, variant: InventoryVariant) => void;
   onMove: (kind: MovementKind, product: InventoryProduct, variant: InventoryVariant) => void;
   onHistory: (product: InventoryProduct, variant: InventoryVariant) => void;
+  /** 每行「操作」按钮：打开集成了全部功能的弹窗 */
+  onOpenActions: (product: InventoryProduct, variant: InventoryVariant) => void;
 };
 
 function QtyCell({ cartons, sets, empty }: { cartons: number; sets: number; empty?: boolean }) {
@@ -47,39 +41,16 @@ function RowMenu({
   handlers: LedgerHandlers;
 }) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label="操作"
-          title="入库 / 出库 / 修正库存 / 编辑颜色、货号"
-          className="h-9 w-9 justify-center rounded-full p-0 text-muted-foreground transition-colors hover:bg-accent hover:text-primary focus-visible:bg-accent data-[state=open]:bg-accent data-[state=open]:text-primary md:h-8 md:w-auto md:gap-1 md:px-2.5 md:text-muted-foreground/60 md:group-hover/row:bg-accent/60 md:group-hover/row:text-foreground print:hidden"
-        >
-          <MoreHorizontal className="size-4" />
-          <span className="hidden text-xs md:inline">操作</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onSelect={() => handlers.onMove("in", product, variant)}>入库</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => handlers.onMove("out", product, variant)}>出库</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => handlers.onMove("adjust", product, variant)}>
-          修正库存
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => handlers.onHistory(product, variant)}>流水</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => handlers.onAddVariant(product)}>添加颜色</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => handlers.onEditVariant(product, variant)}>编辑颜色</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => handlers.onEditProduct(product)}>编辑货号</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onSelect={() => handlers.onDeleteVariant(product, variant)}>
-          删除颜色
-        </DropdownMenuItem>
-        <DropdownMenuItem variant="destructive" onSelect={() => handlers.onDeleteProduct(product)}>
-          删除货号
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+      variant="ghost"
+      size="sm"
+      aria-label="操作"
+      title="入库 / 出库 / 修正库存 / 编辑颜色、货号 / 删除"
+      onClick={() => handlers.onOpenActions(product, variant)}
+      className="h-8 px-2.5 text-xs font-medium text-primary hover:bg-primary/8 hover:text-primary print:hidden"
+    >
+      操作
+    </Button>
   );
 }
 
