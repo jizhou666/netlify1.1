@@ -48,8 +48,12 @@ if [ -d /etc/apt/sources.list.d ]; then
     | xargs -r sed -i 's|//.*archive.ubuntu.com|//mirrors.aliyun.com|g; s|//.*security.ubuntu.com|//mirrors.aliyun.com|g' || true
 fi
 export DEBIAN_FRONTEND=noninteractive
+# Ubuntu 22.04 的 apt 之后会弹「要重启哪些服务」（needrestart）对话框，脚本里必须关掉
+export NEEDRESTART_MODE=a
+export NEEDRESTART_SUSPEND=1
+APT_OPTS=(-y -qq -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
 apt-get update -qq
-apt-get install -y -qq git curl ca-certificates unzip nginx xz-utils >/dev/null
+apt-get install "${APT_OPTS[@]}" git curl ca-certificates unzip nginx xz-utils >/dev/null
 ok "基础软件装好"
 
 # Node 22：优先用国内镜像的官方二进制（比 nodesource 快且稳）
@@ -64,7 +68,7 @@ if ! command -v node >/dev/null 2>&1 || ! node -v | grep -qE '^v(2[2-9]|[3-9][0-
   else
     warn "国内镜像取不到，改用官方源（会慢一些）"
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-    apt-get install -y -qq nodejs
+    apt-get install "${APT_OPTS[@]}" nodejs
   fi
 fi
 NODE_BIN="$(command -v node)"
@@ -152,7 +156,7 @@ if [ "$WITH_CERT" == "1" ] && [ ! -f "$CERT" ]; then
       die "请带上邮箱运行：sudo EMAIL=你的邮箱 bash $0 --cert"
     fi
   fi
-  apt-get install -y -qq certbot python3-certbot-nginx >/dev/null
+  apt-get install "${APT_OPTS[@]}" certbot python3-certbot-nginx >/dev/null
   # 先用纯 HTTP 配置，让 certbot 能完成域名校验
   cat > "$NGINX_CONF" <<EOF
 server {
@@ -185,7 +189,7 @@ if [ -f "$CERT" ]; then
   ok "正式 Nginx 配置已生效（$NGINX_CONF）"
 
   if [ ! -f /etc/nginx/htpasswd-inventory ]; then
-    apt-get install -y -qq apache2-utils >/dev/null
+    apt-get install "${APT_OPTS[@]}" apache2-utils >/dev/null
     warn "库存还没加访问密码。建议执行："
     echo "      sudo htpasswd -c /etc/nginx/htpasswd-inventory huiran"
     echo "    然后去掉 $NGINX_CONF 里 auth_basic 两行的注释，再 nginx -t && systemctl reload nginx"
