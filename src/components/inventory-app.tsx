@@ -1,6 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Download, CloudUpload, FolderTree, Plus, Printer, Search, Upload, Warehouse } from "lucide-react";
+import {
+  CloudUpload,
+  Download,
+  FolderTree,
+  Plus,
+  Printer,
+  Search,
+  Upload,
+  Warehouse,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,6 +33,7 @@ import {
 } from "@/components/inventory-dialogs";
 import { LedgerCards, LedgerTable, type LedgerHandlers } from "@/components/ledger-table";
 import {
+  filterInventory,
   formatLedgerDate,
   ledgerToCsv,
   todayISO,
@@ -34,15 +45,6 @@ import {
   type MovementKind,
 } from "@/lib/inventory";
 import { listCategories, listInventory } from "@/lib/inventory-fns";
-
-function useDebounced<T>(value: T, delay: number) {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = window.setTimeout(() => setDebounced(value), delay);
-    return () => window.clearTimeout(t);
-  }, [value, delay]);
-  return debounced;
-}
 
 export function InventoryApp({
   initial,
@@ -56,7 +58,6 @@ export function InventoryApp({
   const [date, setDate] = useState(initial.date);
   const [warehouse, setWarehouse] = useState(initial.inventory.warehouse || "芳村");
   const [search, setSearch] = useState("");
-  const q = useDebounced(search, 200);
 
   const [productDialog, setProductDialog] = useState<ProductDialogState>({ open: false });
   const [variantDialog, setVariantDialog] = useState<VariantDialogState>({ open: false });
@@ -68,11 +69,13 @@ export function InventoryApp({
   const [importOpen, setImportOpen] = useState(false);
   const [cloudOpen, setCloudOpen] = useState(false);
 
+  // 搜索在本地做（见 filterInventory），queryKey 里不再有搜索词：
+  // 打字不会再反复打接口，只有换日期/仓库或改完数据才重新请求。
   const inventoryQuery = useQuery({
-    queryKey: ["inventory", date, q, warehouse],
-    queryFn: () => listInventory({ data: { date, q, warehouse } }),
+    queryKey: ["inventory", date, warehouse],
+    queryFn: () => listInventory({ data: { date, warehouse } }),
     initialData:
-      date === initial.date && q === "" && warehouse === initial.inventory.warehouse
+      date === initial.date && warehouse === initial.inventory.warehouse
         ? initial.inventory
         : undefined,
     placeholderData: keepPreviousData,
@@ -84,7 +87,9 @@ export function InventoryApp({
     initialData: initial.categories,
   });
 
-  const data = inventoryQuery.data;
+  const raw = inventoryQuery.data;
+  const data = useMemo(() => (raw ? filterInventory(raw, search) : undefined), [raw, search]);
+  const searching = search.trim().length > 0;
   const categories = categoriesQuery.data ?? [];
 
   const handlers: LedgerHandlers = useMemo(
@@ -207,15 +212,34 @@ export function InventoryApp({
           </div>
         )}
 
-        <div className="relative print:hidden">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索货号或颜色"
-            className="pl-9"
-            aria-label="搜索"
-          />
+        <div className="print:hidden">
+          <div className="relative">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="搜索货号或颜色（本地筛选，输入即出结果）"
+              className="pl-9 pr-9"
+              aria-label="搜索"
+            />
+            {searching ? (
+              <button
+                type="button"
+                aria-label="清空搜索"
+                onClick={() => setSearch("")}
+                className="absolute top-1/2 right-2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            ) : null}
+          </div>
+          {searching && data ? (
+            <p className="mt-1.5 px-1 text-xs text-muted-foreground">
+              匹配 <span className="font-medium text-foreground">{data.stats.productCount}</span> 个货号 ·{" "}
+              <span className="font-medium text-foreground">{data.stats.variantCount}</span> 个颜色款
+              {data.stats.productCount === 0 ? "（换个关键词试试）" : ""}
+            </p>
+          ) : null}
         </div>
 
         {inventoryQuery.isLoading ? (
@@ -237,7 +261,7 @@ export function InventoryApp({
           <div className="rounded-xl border border-dashed border-border bg-card px-5 py-16 text-center">
             <p className="font-display text-lg font-semibold">暂无匹配货品</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {q ? "换个关键词试试，或清空搜索。" : "从新增货品开始建立台账。"}
+              {searching ? "换个关键词试试，或点搜索框右侧的 × 清空。" : "从新增货品开始建立台账。"}
             </p>
             <Button className="mt-4" onClick={() => setProductDialog({ open: true, mode: "create" })}>
               新增货品

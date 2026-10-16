@@ -173,3 +173,58 @@ export function ledgerToCsv(payload: InventoryPayload): string {
   return lines.join("\r\n");
 }
 
+/**
+ * 搜索用归一化：全角转半角（（017）→ (017)、２Ｇ → 2g）、统一小写。
+ * 中文输入法下经常混着全角符号，归一化后随手打就能搜到。
+ */
+function normalizeForSearch(value: string): string {
+  return value.normalize("NFKC").toLowerCase();
+}
+
+/**
+ * 本地搜索（不再为每次输入打一次接口）。
+ *
+ * 规则：货号命中就保留它的全部颜色/型号；否则只保留颜色名命中的那些型号。
+ * 统计数字按筛选后的结果重算，和以前服务端筛选看到的一致。
+ */
+export function filterInventory(payload: InventoryPayload, query: string): InventoryPayload {
+  const needle = normalizeForSearch(query.trim());
+  if (!needle) return payload;
+
+  let productCount = 0;
+  let variantCount = 0;
+  let outOfStock = 0;
+  let todayInLines = 0;
+  let todayOutLines = 0;
+
+  const categories: InventoryCategory[] = [];
+  for (const category of payload.categories) {
+    const products: InventoryProduct[] = [];
+    for (const product of category.products) {
+      const skuHit = normalizeForSearch(product.sku).includes(needle);
+      const variants = skuHit
+        ? product.variants
+        : product.variants.filter((variant) =>
+            normalizeForSearch(variant.color).includes(needle),
+          );
+      if (variants.length === 0) continue;
+
+      productCount += 1;
+      for (const variant of variants) {
+        variantCount += 1;
+        if (isOutOfStock(variant.remainingCartons, variant.remainingSets)) outOfStock += 1;
+        if (variant.inCartons !== 0 || variant.inSets !== 0) todayInLines += 1;
+        if (variant.outCartons !== 0 || variant.outSets !== 0) todayOutLines += 1;
+      }
+      products.push(variants === product.variants ? product : { ...product, variants });
+    }
+    if (products.length > 0) categories.push({ ...category, products });
+  }
+
+  return {
+    ...payload,
+    categories,
+    stats: { productCount, variantCount, outOfStock, todayInLines, todayOutLines },
+  };
+}
+
