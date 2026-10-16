@@ -60,7 +60,7 @@ ok "基础软件装好"
 if ! command -v node >/dev/null 2>&1 || ! node -v | grep -qE '^v(2[2-9]|[3-9][0-9])'; then
   echo "    正在安装 Node 22 …"
   BASE="https://registry.npmmirror.com/-/binary/node/latest-v22.x"
-  FILE="$(curl -fsSL "$BASE/" 2>/dev/null | grep -oE 'node-v22\.[0-9]+\.[0-9]+-linux-x64\.tar\.xz' | head -1 || true)"
+  FILE="$(curl -fsSL "$BASE/" 2>/dev/null | grep -oE 'node-v22\.[0-9]+\.[0-9]+-linux-x64\.tar\.xz' | sort -V | tail -1 || true)"
   if [ -n "$FILE" ]; then
     curl -fsSL -o /tmp/node.tar.xz "$BASE/$FILE"
     tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 || die "解压 Node 失败，请手动安装 Node 22 后重跑本脚本"
@@ -101,9 +101,28 @@ cd "$APP_DIR"
 if [ ! -f package.json ]; then
   die "$APP_DIR 里没有 package.json：请先把仓库 clone 到 $APP_DIR 再运行本脚本"
 fi
-if [ ! -f package-lock.json ]; then npm install; else npm ci; fi
-SELF_HOST=1 npm run build || die "构建失败：看看上面的报错（内存不足可在阿里云控制台点「内存优化」或再跑一次本脚本，它会加 swap）"
-ok "构建完成（$APP_DIR/.output）"
+if [ "${SKIP_BUILD:-0}" == "1" ]; then
+  ok "SKIP_BUILD=1：跳过依赖安装与构建（假定你已经构建好了）"
+else
+  build_ok=0
+  if [ -f package-lock.json ]; then
+    npm ci || warn "npm ci 失败，改用 npm install"
+  else
+    npm install
+  fi
+  if [ ! -d node_modules ]; then npm install; fi
+  if SELF_HOST=1 npm run build; then build_ok=1; fi
+  if [ "$build_ok" != "1" ]; then
+    # vite 8 / rolldown 的原生模块在「Windows 生成的 lock + Linux 上 npm ci」时会缺（npm 可选依赖老问题），
+    # 清掉 node_modules 用 npm install 重装一般就好了
+    warn "构建失败，清掉 node_modules 重新装依赖再试一次…"
+    rm -rf node_modules
+    npm install
+    SELF_HOST=1 npm run build && build_ok=1
+  fi
+  [ "$build_ok" == "1" ] || die "构建仍然失败：把上面的报错发我（也可手动 npm install 后跑 SKIP_BUILD=1 bash deploy/install.sh）"
+  ok "构建完成（$APP_DIR/.output）"
+fi
 
 if [ ! -f /etc/inventory.env ]; then
   cp "$APP_DIR/deploy/inventory.env.example" /etc/inventory.env
