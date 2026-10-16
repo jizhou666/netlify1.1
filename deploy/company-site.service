@@ -1,0 +1,34 @@
+[Unit]
+Description=汇然包装独立站 (company-site, 纯 Node)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=huiran
+Group=huiran
+WorkingDirectory=/opt/company-site
+
+Environment=NODE_ENV=production
+Environment=PORT=8081
+# server.js 里是 listen(PORT, ...)，默认绑 0.0.0.0。
+# 建议改一行，让它只听本机（Nginx 反代就够）：
+#   server.listen(PORT, process.env.HOST || "0.0.0.0", () => {
+Environment=HOST=127.0.0.1
+
+# 用 which node 的结果替换
+ExecStart=/usr/bin/node server.js
+
+Restart=always
+RestartSec=5
+MemoryMax=512M
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# 站点自己要写这三个目录：上传的图片/视频、后台内容、日志
+ReadWritePaths=/opt/company-site/uploads /opt/company-site/data /opt/company-site/logs
+
+[Install]
+WantedBy=multi-user.target
