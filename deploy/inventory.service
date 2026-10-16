@@ -1,0 +1,37 @@
+[Unit]
+Description=汇然库存台账 (TanStack Start / Nitro node-server)
+Documentation=https://github.com/jizhou666/netlify1.1
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=inventory
+Group=inventory
+WorkingDirectory=/opt/inventory/app
+
+# 连接串等敏感配置放这里（chmod 600），见 deploy/inventory.env.example
+EnvironmentFile=-/etc/inventory.env
+
+Environment=NODE_ENV=production
+Environment=PORT=8080
+Environment=HOST=127.0.0.1
+Environment=PGLITE_DIR=/var/lib/inventory/pglite
+
+# 用 which node 的结果替换（nvm 装的通常不是 /usr/bin/node）
+ExecStart=/usr/bin/node .output/server/index.mjs
+
+Restart=always
+RestartSec=5
+# 内嵌 Postgres 常驻约 200MB，留点余量
+MemoryMax=1G
+
+# 只允许写数据目录，代码目录只读
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/inventory
+
+[Install]
+WantedBy=multi-user.target
