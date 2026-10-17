@@ -17,7 +17,7 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 Set-Location $repo
 
-$sshOpts = @('-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=15')
+$sshOpts = @('-n', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=15')
 function Step([string]$n, [string]$t) { Write-Host ''; Write-Host "== $n $t" -ForegroundColor Cyan }
 function Fail([string]$msg) { Write-Host ''; Write-Host "[失败] $msg" -ForegroundColor Red; exit 1 }
 

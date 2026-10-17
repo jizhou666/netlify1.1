@@ -16,7 +16,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$sshOpts = @('-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=15')
+$sshOpts = @('-n', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=15')
+$scpOpts = @('-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=15')
 function Step([string]$n, [string]$t) { Write-Host ''; Write-Host "== $n $t" -ForegroundColor Cyan }
 function Fail([string]$msg) { Write-Host ''; Write-Host "[失败] $msg" -ForegroundColor Red; exit 1 }
 
@@ -33,7 +34,7 @@ if ($LASTEXITCODE -ne 0) { Fail '打包失败' }
 Write-Host ("包大小：{0:N0} KB" -f ((Get-Item $archive).Length / 1KB))
 
 Step '2/3' "上传并部署（$Server）"
-& scp @sshOpts $archive "${Server}:/tmp/$name.tgz"
+& scp @scpOpts $archive "${Server}:/tmp/$name.tgz"
 if ($LASTEXITCODE -ne 0) { Fail '上传失败：检查 SSH 免密是否配好（见 deploy/README.md）' }
 
 $remote = @"
