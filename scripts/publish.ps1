@@ -41,7 +41,7 @@ if ($changed) {
 if ($LASTEXITCODE -ne 0) { Fail 'git push 失败：检查网络或 Git 凭据' }
 
 Step '3/4' "让服务器拉取并重建（$Server，约 3~8 分钟）"
-& ssh @sshOpts $Server "cd $RemoteDir && bash deploy/update.sh"
+& ssh @sshOpts $Server "cd $RemoteDir && git fetch -q origin && git reset --hard origin/main && bash deploy/update.sh"
 if ($LASTEXITCODE -ne 0) {
   Write-Host ''
   Write-Host '服务器更新失败。两种常见原因：' -ForegroundColor Yellow
