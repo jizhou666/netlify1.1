@@ -224,3 +224,37 @@ sudo crontab -e
 
 - 想让服务器成为**唯一**数据源：Windows 那份留作历史备份，别再往两边录数据（各有一份内嵌库，会分叉）；
 - 想继续用 Windows 做备份：保留库存页面的「云端同步」按钮，定期推一次到 Neon。
+
+## 十二、一键发布（改完代码双击一次）
+
+| 按钮 | 作用 | 耗时 |
+| --- | --- | --- |
+| `发布到服务器.bat` | 库存台账：类型检查 → 提交并推送 GitHub → 服务器 `git reset` 到最新 → 装依赖 → 构建 → 重启 → 自检 | 3~8 分钟 |
+| `发布独立站.bat` | 独立站：打包代码（**不含** `data/`、`uploads/`）→ 上传覆盖 → 重启 | 10~30 秒 |
+
+> 只改**内容**（产品、图片、文案）不需要发布：独立站登录 `/admin/` 改、库存直接在页面里改。
+
+### 首次使用前：配一次 SSH 免密（只需一次）
+
+```powershell
+# 1) 本机生成密钥（一路回车，密码短语留空）
+ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\id_ed25519"
+
+# 2A) 推荐：打印公钥，用 Workbench 粘到服务器
+Get-Content "$env:USERPROFILE\.ssh\id_ed25519.pub"
+#    在服务器上执行（把整串公钥替换进去）：
+#    mkdir -p ~/.ssh && echo 'ssh-ed25519 AAAA...你的公钥' >> ~/.ssh/authorized_keys
+#    chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys
+
+# 2B) 或者：控制台「重置密码」给 root 设密码后，一条命令推上去（会提示输一次密码）
+type "$env:USERPROFILE\.ssh\id_ed25519.pub" | ssh root@8.163.86.170 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys"
+
+# 3) 验证：不提示密码、直接打印主机名就配好了
+ssh -o BatchMode=yes root@8.163.86.170 hostname
+```
+
+### 几个说明
+- 服务器上的 `deploy/update.sh` 用 `git reset --hard origin/main` 对齐代码——服务器上被 `npm` 改过的 `package-lock.json` 之类不会挡住发布。
+- 发布脚本以 **GitHub 为源**：服务器要能 `git pull`（首次 clone 成功过即可）。如果哪次拉不动 GitHub，改用打包上传：本地 `tar` → `scp` → 服务器解开 → `SELF_HOST=1 npm run build` → `systemctl restart inventory`。
+- 发布完成后浏览器按 **Ctrl+F5** 强制刷新（服务端渲染的页面不会自动更新）。
+

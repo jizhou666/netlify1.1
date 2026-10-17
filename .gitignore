@@ -50,3 +50,7 @@ attachments/
 
 # TypeScript build cache
 *.tsbuildinfo
+
+# 一次性权限修复记录（与本项目无关）
+acl-repair/
+
