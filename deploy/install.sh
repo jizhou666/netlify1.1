@@ -56,25 +56,37 @@ apt-get update -qq
 apt-get install "${APT_OPTS[@]}" git curl ca-certificates unzip nginx xz-utils >/dev/null
 ok "基础软件装好"
 
-# Node 22：优先用国内镜像的官方二进制（比 nodesource 快且稳）
-if ! command -v node >/dev/null 2>&1 || ! node -v | grep -qE '^v(2[2-9]|[3-9][0-9])'; then
-  echo "    正在安装 Node 22 …"
-  BASE="https://registry.npmmirror.com/-/binary/node/latest-v22.x"
-  FILE="$(curl -fsSL "$BASE/" 2>/dev/null | grep -oE 'node-v22\.[0-9]+\.[0-9]+-linux-x64\.tar\.xz' | sort -V | tail -1 || true)"
+# Node：需要 >= 22.12（vite 8 的硬要求），直接装 Node 24 LTS（自带 npm 11，避开了
+# npm 10.5 在没有 lock 时 "Cannot read properties of null (reading 'edgesOut')" 的 bug）
+node_ok() {
+  command -v node >/dev/null 2>&1 || return 1
+  local v major minor
+  v="$(node -v | sed 's/^v//')"
+  major="${v%%.*}"
+  minor="$(echo "$v" | cut -d. -f2)"
+  if [ "$major" -gt 22 ]; then return 0; fi
+  if [ "$major" -eq 22 ] && [ "${minor:-0}" -ge 12 ]; then return 0; fi
+  return 1
+}
+if ! node_ok; then
+  echo "    正在安装 Node 24 LTS …（当前：$(node -v 2>/dev/null || echo 无)）"
+  BASE="https://registry.npmmirror.com/-/binary/node/latest-v24.x"
+  FILE="$(curl -fsSL "$BASE/" 2>/dev/null | grep -oE 'node-v24\.[0-9]+\.[0-9]+-linux-x64\.tar\.xz' | sort -V | tail -1 || true)"
   if [ -n "$FILE" ]; then
     curl -fsSL -o /tmp/node.tar.xz "$BASE/$FILE"
-    tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 || die "解压 Node 失败，请手动安装 Node 22 后重跑本脚本"
+    tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 || die "解压 Node 失败，请手动安装 Node 24 后重跑本脚本"
     rm -f /tmp/node.tar.xz
+    hash -r
   else
     warn "国内镜像取不到，改用官方源（会慢一些）"
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
     apt-get install "${APT_OPTS[@]}" nodejs
   fi
 fi
 NODE_BIN="$(command -v node)"
 ok "Node：$($NODE_BIN -v)（$NODE_BIN）"
 npm config set registry https://registry.npmmirror.com >/dev/null 2>&1 || true
-ok "npm 源：$(npm config get registry)"
+ok "npm：$(npm -v)（源 $(npm config get registry)）"
 
 log "3/8 配置 2G swap（2G 内存的机器防 OOM）"
 if swapon --show 2>/dev/null | grep -q '/swapfile' || [ -f /swapfile ]; then
