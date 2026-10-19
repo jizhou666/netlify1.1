@@ -251,10 +251,10 @@ export function InventoryApp({
         ) : data && !empty ? (
           <>
             <div className="hidden md:block">
-              <LedgerTable categories={data.categories} handlers={handlers} />
+              <LedgerTable categories={data.categories} handlers={handlers} resetKey={search} />
             </div>
             <div className="md:hidden">
-              <LedgerCards categories={data.categories} handlers={handlers} />
+              <LedgerCards categories={data.categories} handlers={handlers} resetKey={search} />
             </div>
           </>
         ) : (
