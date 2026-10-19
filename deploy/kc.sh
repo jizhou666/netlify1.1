@@ -67,11 +67,12 @@ cmd_check() {
   code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "http://127.0.0.1:$PORT/" 2>/dev/null)"
   size="$(curl -s --max-time 20 "http://127.0.0.1:$PORT/" 2>/dev/null | wc -c | tr -d ' ')"
   [ "$code" = "200" ] && ok "页面 HTTP 200（${size} 字节）" || bad "页面 HTTP $code"
-  # 满数据时首页约 1.8MB；只有 4 个示例货号时会小很多，用它判断数据在不在
-  if [ "${size:-0}" -gt 1000000 ]; then
-    ok "页面 ${size} 字节 —— 业务数据完整"
+  # 页面里内联了统计数字（productCount:339），用它判断数据在不在，比看字节数可靠
+  count="$(curl -s --max-time 20 "http://127.0.0.1:$PORT/" 2>/dev/null | grep -ao 'productCount:[0-9]*' | head -1 | cut -d: -f2)"
+  if [ -n "${count:-}" ] && [ "${count:-0}" -gt 0 ]; then
+    ok "台账里有 ${count} 个货号"
   else
-    warn "页面只有 ${size} 字节 —— 数据可能是空的（或刚被清空）"
+    warn "页面里没读到货号统计 —— 数据可能是空的（或页面渲染异常）"
   fi
   [ "$(state)" = "active" ] && ok "systemd 状态正常" || bad "systemd 状态：$(state)"
   dim "最近错误日志（显示 -- No entries -- 就是没报错）："
