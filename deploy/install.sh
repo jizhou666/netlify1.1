@@ -160,6 +160,8 @@ systemctl is-active --quiet inventory && ok "inventory 已启动" || warn "inven
 
 if [ -d "$SITE_DIR" ] && [ -f "$SITE_DIR/server.js" ]; then
   install_unit "$APP_DIR/deploy/company-site.service" company-site.service "$SITE_DIR"
+  # systemd 的 ReadWritePaths 要求这些目录必须存在，否则服务起不来（226/NAMESPACE）
+  mkdir -p "$SITE_DIR/data" "$SITE_DIR/uploads" "$SITE_DIR/logs"
   chown -R root:root "$SITE_DIR"
   chown -R huiran:huiran "$SITE_DIR/uploads" "$SITE_DIR/data" "$SITE_DIR/logs" 2>/dev/null || true
   [ -f "$SITE_DIR/data/config.json" ] && chmod 600 "$SITE_DIR/data/config.json" || true
