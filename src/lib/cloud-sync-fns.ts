@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { inventoryGate } from "@/lib/inventory-gate";
 import { dbSource, getSql } from "@/lib/db";
 import {
   copyInventory,
@@ -78,7 +79,7 @@ async function withTarget<T>(url: string, fn: (target: SyncTarget) => Promise<T>
   }
 }
 
-export const cloudSyncStatus = createServerFn({ method: "GET" }).handler(
+export const cloudSyncStatus = createServerFn({ method: "GET" }).middleware([inventoryGate]).handler(
   async (): Promise<CloudSyncStatus> => {
     const sql = await getSql();
     const source: SyncRunner = {
@@ -164,7 +165,7 @@ export type CloudSyncResult = {
  * 一键上传：清空云端业务表 → 把本机台账按原 id 写入 → 拨正自增序列 → 记录同步时间。
  * confirm 必须是 true（前端在确认弹窗里才发），避免误触清空云端。
  */
-export const pushToCloud = createServerFn({ method: "POST" })
+export const pushToCloud = createServerFn({ method: "POST" }).middleware([inventoryGate])
   .validator((input: unknown) => {
     const data = input as { confirm?: boolean };
     if (data?.confirm !== true) throw new Error("请先在弹窗里确认后再同步");

@@ -1,12 +1,19 @@
-import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
+import { createRootRoute, HeadContent, Outlet, Scripts, redirect } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
+import { gateStatus } from "@/lib/inventory-gate";
 import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
 
 const APP_NAME = "芳村仓库存";
 
 export const Route = createRootRoute({
+  // 登录门：没通过密码验证的一律先去 /login（业务接口另外还有中间件兜底）
+  beforeLoad: async ({ location }) => {
+    if (location.pathname === "/login") return;
+    const { authorized } = await gateStatus();
+    if (!authorized) throw redirect({ to: "/login" });
+  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },

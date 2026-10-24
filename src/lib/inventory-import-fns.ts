@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { inventoryGate } from "@/lib/inventory-gate";
 import { getSql } from "@/lib/db";
 import {
   buildImportDraft,
@@ -37,7 +38,7 @@ async function parseWorkbook(data: Uint8Array, sheetName?: string): Promise<Impo
 }
 
 /** 解析上传的 Excel → 返回导入预览（不落库）。 */
-export const parseImportFile = createServerFn({ method: "POST" })
+export const parseImportFile = createServerFn({ method: "POST" }).middleware([inventoryGate])
   .validator((input: unknown) => {
     const data = (input as { base64?: string; sheetName?: string }).base64;
     if (!data || data.length > 30_000_000) throw new Error("文件为空或超过 20MB。");
@@ -60,7 +61,7 @@ export const parseImportFile = createServerFn({ method: "POST" })
   });
 
 /** 把上传的 Excel 重新解析并写入数据库（清空重建，单事务）。 */
-export const commitImport = createServerFn({ method: "POST" })
+export const commitImport = createServerFn({ method: "POST" }).middleware([inventoryGate])
   .validator((input: unknown) => {
     const data = (input as { base64?: string; sheetName?: string }).base64;
     if (!data || data.length > 30_000_000) throw new Error("文件为空或超过 20MB。");

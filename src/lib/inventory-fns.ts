@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { inventoryGate } from "@/lib/inventory-gate";
 import { z } from "zod";
 import { getSql } from "@/lib/db";
 import { subtractStock } from "@/lib/stock-math";
@@ -212,11 +213,11 @@ const dateInput = z.object({
   warehouse: z.string().trim().min(1).max(20).default("芳村"),
 });
 
-export const listInventory = createServerFn({ method: "POST" })
+export const listInventory = createServerFn({ method: "POST" }).middleware([inventoryGate])
   .validator((input: unknown) => dateInput.parse(input))
   .handler(async ({ data }) => loadInventory(data.date, data.q ?? "", data.warehouse));
 
-export const listCategories = createServerFn({ method: "GET" }).handler(async () => {
+export const listCategories = createServerFn({ method: "GET" }).middleware([inventoryGate]).handler(async () => {
   const sql = await getSql();
   const rows = await sql<CategoryRow>`
     select id, name, sort_order from categories order by sort_order, id
@@ -233,7 +234,7 @@ const createCategoryInput = z.object({
   name: z.string().trim().min(1).max(40),
 });
 
-export const createCategory = createServerFn({ method: "POST" })
+export const createCategory = createServerFn({ method: "POST" }).middleware([inventoryGate])
   .validator((input: unknown) => createCategoryInput.parse(input))
   .handler(async ({ data }) => {
     const sql = await getSql();
@@ -256,7 +257,7 @@ export const createCategory = createServerFn({ method: "POST" })
 
 const deleteCategoryInput = z.object({ id: z.number().int() });
 
-export const deleteCategory = createServerFn({ method: "POST" })
+export const deleteCategory = createServerFn({ method: "POST" }).middleware([inventoryGate])
   .validator((input: unknown) => deleteCategoryInput.parse(input))
   .handler(async ({ data }) => {
     const sql = await getSql();
@@ -281,7 +282,7 @@ const createProductInput = z.object({
   warehouse: z.string().trim().min(1).max(20).default("芳村"),
 });
 
-export const createProduct = createServerFn({ method: "POST" })
+export const createProduct = createServerFn({ method: "POST" }).middleware([inventoryGate])
   .validator((input: unknown) => createProductInput.parse(input))
   .handler(async ({ data }) => {
     const sql = await getSql();
@@ -316,7 +317,7 @@ const updateProductInput = z.object({
   syncVariants: z.boolean().optional(),
 });
 
-export const updateProduct = createServerFn({ method: "POST" })
+export const updateProduct = createServerFn({ method: "POST" }).middleware([inventoryGate])
   .validator((input: unknown) => updateProductInput.parse(input))
   .handler(async ({ data }) => {
     const sql = await getSql();
@@ -343,7 +344,7 @@ export const updateProduct = createServerFn({ method: "POST" })
 
 const deleteProductInput = z.object({ id: z.number().int() });
 
-export const deleteProduct = createServerFn({ method: "POST" })
+export const deleteProduct = createServerFn({ method: "POST" }).middleware([inventoryGate])
   .validator((input: unknown) => deleteProductInput.parse(input))
   .handler(async ({ data }) => {
     const sql = await getSql();
@@ -361,7 +362,7 @@ const createVariantInput = z.object({
   packingUnit: z.string().trim().min(1).max(8).optional(),
 });
 
-export const createVariant = createServerFn({ method: "POST" })
+export const createVariant = createServerFn({ method: "POST" }).middleware([inventoryGate])
   .validator((input: unknown) => createVariantInput.parse(input))
   .handler(async ({ data }) => {
     const sql = await getSql();
@@ -391,7 +392,7 @@ const updateVariantInput = z.object({
   packingUnit: z.string().trim().min(1).max(8).nullable().optional(),
 });
 
-export const updateVariant = createServerFn({ method: "POST" })
+export const updateVariant = createServerFn({ method: "POST" }).middleware([inventoryGate])
   .validator((input: unknown) => updateVariantInput.parse(input))
   .handler(async ({ data }) => {
     const sql = await getSql();
@@ -425,7 +426,7 @@ export const updateVariant = createServerFn({ method: "POST" })
 
 const deleteVariantInput = z.object({ id: z.number().int() });
 
-export const deleteVariant = createServerFn({ method: "POST" })
+export const deleteVariant = createServerFn({ method: "POST" }).middleware([inventoryGate])
   .validator((input: unknown) => deleteVariantInput.parse(input))
   .handler(async ({ data }) => {
     const sql = await getSql();
@@ -455,7 +456,7 @@ const recordMovementInput = z.object({
   note: z.string().trim().max(120).optional(),
 });
 
-export const recordMovement = createServerFn({ method: "POST" })
+export const recordMovement = createServerFn({ method: "POST" }).middleware([inventoryGate])
   .validator((input: unknown) => recordMovementInput.parse(input))
   .handler(async ({ data }) => {
     if (data.kind !== "adjust" && data.cartons === 0 && data.sets === 0) {
@@ -518,7 +519,7 @@ const listMovementsInput = z.object({
   variantId: z.number().int(),
 });
 
-export const listMovements = createServerFn({ method: "POST" })
+export const listMovements = createServerFn({ method: "POST" }).middleware([inventoryGate])
   .validator((input: unknown) => listMovementsInput.parse(input))
   .handler(async ({ data }) => {
     const sql = await getSql();
