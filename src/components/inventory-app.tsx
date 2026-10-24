@@ -45,6 +45,7 @@ import {
   type MovementKind,
 } from "@/lib/inventory";
 import { listCategories, listInventory } from "@/lib/inventory-fns";
+import { cloudSyncStatus } from "@/lib/cloud-sync-fns";
 
 export function InventoryApp({
   initial,
@@ -71,6 +72,12 @@ export function InventoryApp({
 
   // 搜索在本地做（见 filterInventory），queryKey 里不再有搜索词：
   // 打字不会再反复打接口，只有换日期/仓库或改完数据才重新请求。
+  // 只有配了云端同步地址才显示按钮（没配就藏起来，免得同事点开看到"未配置"）
+  const cloudStatusQuery = useQuery({
+    queryKey: ["cloud-sync-status"],
+    queryFn: () => cloudSyncStatus(),
+    staleTime: 5 * 60_000,
+  });
   const inventoryQuery = useQuery({
     queryKey: ["inventory", date, warehouse],
     queryFn: () => listInventory({ data: { date, warehouse } }),
@@ -142,10 +149,12 @@ export function InventoryApp({
               <Upload className="size-4" />
               <span className="hidden sm:inline">导入表格</span>
             </Button>
-            <Button variant="outline" className="print:hidden" onClick={() => setCloudOpen(true)}>
-              <CloudUpload className="size-4" />
-              <span className="hidden sm:inline">云端同步</span>
-            </Button>
+            {cloudStatusQuery.data?.configured ? (
+              <Button variant="outline" className="print:hidden" onClick={() => setCloudOpen(true)}>
+                <CloudUpload className="size-4" />
+                <span className="hidden sm:inline">云端同步</span>
+              </Button>
+            ) : null}
             <Button variant="outline" className="print:hidden" onClick={() => setCategoryOpen(true)}>
               <FolderTree className="size-4" />
               分类
