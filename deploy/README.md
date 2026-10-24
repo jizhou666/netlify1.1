@@ -258,3 +258,43 @@ ssh -o BatchMode=yes root@8.163.86.170 hostname
 - 发布脚本以 **GitHub 为源**：服务器要能 `git pull`（首次 clone 成功过即可）。如果哪次拉不动 GitHub，改用打包上传：本地 `tar` → `scp` → 服务器解开 → `SELF_HOST=1 npm run build` → `systemctl restart inventory`。
 - 发布完成后浏览器按 **Ctrl+F5** 强制刷新（服务端渲染的页面不会自动更新）。
 
+## 十三、证书：用 DNS 校验（国内推荐）
+
+`certbot --nginx`（HTTP-01）在国内经常失败：nginx 日志里能看到校验请求**已经 200 正常返回**，但 Let's Encrypt 的多点校验里有节点在到达服务器前被重置（`Connection reset by peer`）；改 DNS-01 又偶发 `SERVFAIL`（二次校验查国内 DNS）。
+
+**可靠做法：用阿里云 DNS 接口签证书**（不依赖 80 端口，续期也自动）：
+
+```bash
+# 1) 建一个只给 DNS 权限的 RAM 用户，拿 AccessKey
+#    阿里云 → RAM 访问控制 → 用户 → 创建用户（只勾「使用永久 AccessKey 访问」）
+#    授权 AliyunDNSFullAccess（千万别给 AdministratorAccess）
+# 2) 在服务器上跑
+sudo Ali_Key='AccessKeyID' Ali_Secret='AccessKeySecret' bash /root/issue-cert.sh
+```
+
+脚本会：装 acme.sh（含 dns_ali 插件）→ 自动加 TXT 记录 → 签发（先 Let's Encrypt，失败自动换 ZeroSSL）→ 证书装到 `/etc/letsencrypt/live/huiranpk.com/` → 配好 90 天自动续期 cron。
+
+签完装正式 Nginx 配置（Ubuntu 22.04 自带 **nginx 1.18 不支持 `http2 on;`**，必须是 `listen 443 ssl http2;`）：
+
+```bash
+sudo cp /opt/inventory/app/deploy/nginx-huiranpk.conf /etc/nginx/conf.d/huiranpk.conf
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+上线后应有的结果（实测通过）：
+
+| 地址 | 行为 |
+| --- | --- |
+| `http://huiranpk.com`、`http://www.huiranpk.com` | 301 → `https://www.huiranpk.com` |
+| `https://www.huiranpk.com` | 200，独立站 |
+| `https://huiranpk.com` | 301 → www |
+| `https://kc.huiranpk.com` | 401 → 输入账号密码后 200（库存台账） |
+| `https://<公网IP>` | 444，直接断开 |
+
+改库存访问密码：
+```bash
+sudo htpasswd /etc/nginx/htpasswd-inventory huiran   # 按提示输入新密码
+sudo systemctl reload nginx
+```
+
+
