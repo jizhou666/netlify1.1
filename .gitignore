@@ -54,3 +54,12 @@ attachments/
 # 一次性权限修复记录（与本项目无关）
 acl-repair/
 
+
+# 百度主动推送 token（不要提交到仓库）
+.baidu-token
+
+
+# 密钥/凭据类文件，一律不进仓库
+/AccessKey*.txt
+*Secret*.txt
+

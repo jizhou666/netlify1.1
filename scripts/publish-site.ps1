@@ -49,5 +49,12 @@ curl -fsS http://127.0.0.1:8081/ -o /dev/null && echo '服务器自检：独立�
 & ssh @sshOpts $Server $remote
 if ($LASTEXITCODE -ne 0) { Fail '服务器部署失败（看上面的输出，或 journalctl -u company-site -n 50）' }
 
-Step '3/3' '完成'
+Step '3/4' '通知百度来抓取（主动推送）'
+try {
+  & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'push-baidu.ps1') -Site 'https://www.huiranpk.com' -Urls @('https://www.huiranpk.com/')
+} catch {
+  Write-Host '（百度推送失败，不影响网站本身）' -ForegroundColor Yellow
+}
+
+Step '4/4' '完成'
 Write-Host '独立站已更新。刷新页面即可看到（Ctrl+F5）。' -ForegroundColor Green
